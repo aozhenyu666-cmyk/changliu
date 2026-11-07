@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 总控融合模块的清单：组件统一在 :app 的清单里声明，这里只保留权限与包可见性。 -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" />

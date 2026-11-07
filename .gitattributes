@@ -1,0 +1,3 @@
+# Windows 批处理必须是 CRLF，否则新克隆下来 gradlew.bat 会报错
+*.bat text eol=crlf
+*.cmd text eol=crlf

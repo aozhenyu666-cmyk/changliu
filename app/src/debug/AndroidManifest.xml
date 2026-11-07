@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- 只用于调试构建：一个临时入口，方便在真机 / 模拟器上单独看暗色页的排版。
+         发布版（release）不含这个文件，安装包里没有这个 Activity。 -->
+    <application>
+        <activity
+            android:name=".UiPreviewActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Driver.Card" />
+
+        <!-- 调试入口：adb shell am start -n com.changliu.app/.ui.MemoryActivity -->
+        <activity
+            android:name=".ui.MemoryActivity"
+            android:exported="true"
+            tools:replace="android:exported" />
+
+        <!-- 调试入口：adb shell am broadcast -a com.changliu.app.DEBUG_NUDGE -->
+        <receiver
+            android:name=".DebugNudgeReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.changliu.app.DEBUG_NUDGE" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

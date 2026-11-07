@@ -1,0 +1,10 @@
+build/
+.gradle/
+.kotlin/
+local.properties
+*.iml
+.idea/
+# 发布产物进 Release，不进 git 历史
+dist/*.apk
+dist/*.zip
+*.log
