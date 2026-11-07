@@ -1,0 +1,755 @@
+package com.changliu.app
+
+import android.Manifest
+import android.app.Activity
+import android.app.AlertDialog
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.PowerManager
+import android.provider.Settings
+import android.view.Gravity
+import android.view.View
+import android.widget.CheckBox
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
+import android.widget.Toast
+import com.changliu.app.infra.keepalive.KeepAliveService
+import com.changliu.core.Phase
+import com.changliu.core.Profile
+
+/**
+ * 首页：现在的状态、开始陪练、拦截娱乐 App、要的权限、连接大肥鱼、我的主线、上一次。
+ *
+ * 界面全部用代码搭，不依赖 androidx 库；样式集中在 [Ui]。
+ * 页面按"状态切换时重建、每秒只改几个字"来做，倒计时不会让整页闪一下、也不会把滚动位置弹回顶部。
+ */
+class MainActivity : Activity() {
+    private val main = Handler(Looper.getMainLooper())
+    private lateinit var ui: Ui
+    private lateinit var scroller: ScrollView
+    private lateinit var body: LinearLayout
+
+    /** 上一次检查连接的结果（后台线程查，主线程显示）。 */
+    @Volatile private var ping: DshLink.Ping? = null
+    @Volatile private var pinging = false
+
+    /** 已经画出来的那一版是"陪练中"还是"待机"，只在切换时重建整页。 */
+    private var builtLocked: Boolean? = null
+    private var builtAwareness=-1L
+    private var awarenessStatus: TextView?=null
+
+    // 陪练中每秒会变的地方：只改文字，不重建
+    private var clock: TextView? = null
+    private var phaseChip: TextView? = null
+    private var meter: Bar? = null
+    private var statGrounded: TextView? = null
+    private var statResponded: TextView? = null
+    private var askBlock: LinearLayout? = null
+    private var askText: TextView? = null
+
+    private val refresher = object : Runnable {
+        override fun run() {
+            render()
+            if (Engine.locked || AwarenessRuntime.active) main.postDelayed(this, 1_000)
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        ui = Ui(this, Palette.light)
+        body = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(ui.px(20), ui.px(26), ui.px(20), ui.px(40))
+            setBackgroundColor(Palette.light.bg)
+        }
+        scroller = ScrollView(this).apply {
+            isFillViewport = true
+            setBackgroundColor(Palette.light.bg)
+            addView(body)
+        }
+        setContentView(scroller)
+        window.statusBarColor = Palette.light.bg
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if(AwarenessRuntime.active) {KeepAliveService.startLock(this,"监督模式");Engine.ensureTicker()}
+        Engine.onChange = { render(); if (Engine.locked || AwarenessRuntime.active) { main.removeCallbacks(refresher); main.post(refresher) } }
+        // 先自愈再渲染：无障碍被关掉时，"写回去"和"显示成已开"要在同一次刷新里完成，
+        // 否则会先闪一下"未开"，让人以为还得手点一次
+        A11yGuard.ensure(this)
+        WatchdogJob.schedule(this)
+        KeepAliveService.sync(this)
+        render(force = true)
+        main.removeCallbacks(refresher)
+        main.post(refresher)
+        checkLink()
+    }
+
+    override fun onPause() {
+        Engine.onChange = null
+        main.removeCallbacks(refresher)
+        super.onPause()
+    }
+
+    // ───────────── 页面骨架 ─────────────
+
+    private fun render(force: Boolean = false) {
+        val locked = Engine.locked
+        if (force || builtLocked != locked || builtAwareness!=AwarenessRuntime.revision || body.childCount == 0) rebuild(locked)
+        awarenessStatus?.text=AwarenessRuntime.state?.takeIf {it.active}?.let { "监督中 · 剩余 ${((it.endsAt-System.currentTimeMillis())/60_000).coerceAtLeast(0)} 分钟" } ?: "伙伴模式 · 不定时察觉"
+        refreshLive()
+    }
+
+    private fun rebuild(locked: Boolean) {
+        val y = scroller.scrollY
+        builtLocked = locked
+        builtAwareness=AwarenessRuntime.revision
+        clock = null; phaseChip = null; meter = null
+        statGrounded = null; statResponded = null; askBlock = null; askText = null
+        body.removeAllViews()
+        ui.reset(body)
+
+        header(locked)
+        awarenessCard()
+        if (locked) session() else idle()
+        ui.footnote("不录音。观察文本可同步给本机 DSH Go，并由你配置的模型分析；察觉截图仅保存在本机，7天清理，不上传。")
+        // 重建后把滚动位置放回去，别让人以为页面跳了
+        main.post { scroller.scrollTo(0, y) }
+    }
+
+    private fun header(locked: Boolean) {
+        val s = Engine.snapshot
+        ui.kicker("思维驾驶员")
+        ui.headline(
+            when {
+                !locked -> "先钉住一件事"
+                else -> s?.let { it.task.ifBlank { it.topic } }?.ifBlank { "陪练中" } ?: "陪练中"
+            },
+        )
+        ui.lead(
+            if (locked) "断点在这儿，接回去就好，不用一次想完。"
+            else "开着 Gemini Live 学习时，我在顶部浮一张小卡追问你。不抢你的屏，不判你切走。",
+        )
+    }
+
+    // ───────────── 陪练中 ─────────────
+
+    private fun session() {
+        val s = Engine.snapshot ?: return
+        ui.card {
+            phaseChip = ui.chip(phaseLabel(s.phase), phaseTone(s.phase), align = Gravity.START)
+            clock = ui.display("0:00", 40f)
+            ui.caption("剩余时间")
+            meter = ui.meter().also { b ->
+                b.trackColor = Palette.light.border
+                b.fillColor = Palette.light.accent
+            }
+            askBlock = ui.card(muted = true) {
+                ui.kicker("这一问")
+                askText = ui.text("", 16f, Palette.light.text, top = 2f, bottom = 0f)
+            }.also { (it.layoutParams as LinearLayout.LayoutParams).topMargin = ui.px(14) }
+            ui.spacer(6f)
+            ui.stats(listOf("0" to "有依据", "0" to "回应")).also {
+                statGrounded = it[0]
+                statResponded = it[1]
+            }
+            ui.primary("回到 Live") { Engine.relaunchAnchor(this) }
+            ui.row {
+                ui.cell(weight = 1f, right = 5f) {
+                    ui.secondary("休息…") { askPause() }
+                }
+                ui.cell(weight = 1f) {
+                    ui.quiet("紧急结束", Palette.light.danger) { confirmStop() }
+                }
+            }
+        }
+    }
+
+    private fun refreshLive() {
+        if (!Engine.locked) return
+        val s = Engine.snapshot ?: return
+        val now = System.currentTimeMillis()
+        val total = (s.endsAt - s.startedAt).coerceAtLeast(1L)
+        val left = ((s.endsAt - now) / 1000).coerceAtLeast(0)
+        clock?.text = "${left / 60}:${"%02d".format(left % 60)}"
+        meter?.fraction = ((now - s.startedAt).toFloat() / total).coerceIn(0f, 1f)
+        phaseChip?.let { ui.styleChip(it, phaseLabel(s.phase), phaseTone(s.phase)) }
+        statGrounded?.text = s.summary.grounded.toString()
+        statResponded?.text = s.summary.responded.toString()
+        val card = s.card?.takeIf { !it.answered }
+        askBlock?.visibility = if (card == null) View.GONE else View.VISIBLE
+        askText?.text = card?.text.orEmpty()
+    }
+
+    private fun phaseLabel(phase: Phase): String = when (phase) {
+        Phase.LOCKED -> "进行中"
+        Phase.INTERRUPTED_BY_SWITCH -> "等你接回断点"
+        Phase.PAUSED -> "休息中"
+        Phase.WRAPPING -> "等一句结论"
+        Phase.ENDED -> "已结束"
+        Phase.IDLE -> "待机"
+    }
+
+    private fun phaseTone(phase: Phase): Tone = when (phase) {
+        Phase.LOCKED -> Tone.OK
+        Phase.PAUSED, Phase.ENDED, Phase.IDLE -> Tone.NEUTRAL
+        else -> Tone.WARN
+    }
+
+    // ───────────── 未在陪练 ─────────────
+
+    private fun idle() {
+        val store = Engine.store
+        val settings = store.settings()
+
+        ui.tiles(
+            listOf(
+                Tile("拦截", blockTileValue(), blockTileTone()),
+                Tile("大脑", linkTileValue(), linkTileTone()),
+                Tile("无障碍", if (A11yGuard.isOn(this)) "已开" else "未开", if (A11yGuard.isOn(this)) Tone.OK else Tone.BAD),
+            ),
+        )
+
+        startCard(settings.minutes, store)
+        blockingCard()
+        guardCard()
+        permissionCard()
+        llmCard()
+        linkCard()
+        profileCard()
+        historyCards()
+        diagnosticsCard()
+    }
+
+    private fun startCard(minutes: Int, store: Store) {
+        val options = listOf(10, 15, 25, 45)
+        val last = store.last()
+        ui.card(title = "开始一次陪练") {
+            ui.caption("开着 Gemini Live，正常学。卡片浮在上面问一句，不会盖住屏幕。")
+            ui.spacer(8f)
+            val topic = ui.field("主题，例：行测 · 图形推理", last?.topic.orEmpty())
+            val task = ui.field("这一节只钉一件事，例：第 3 题", "")
+            ui.caption("多久")
+            var pick = options.indexOf(minutes).takeIf { it >= 0 } ?: 1
+            ui.choice(options.map { "$it 分钟" }, pick) { i -> pick = i }
+            ui.primary("开始陪练") {
+                val m = options[pick]
+                store.saveSettings(store.settings().copy(minutes = m))
+                Engine.start(topic.text.toString().trim(), task.text.toString().trim(), m)
+                main.postDelayed({ Engine.relaunchAnchor(this) }, 600)
+            }
+        }
+    }
+
+    private fun awarenessCard() {
+        val store=Engine.store.observations
+        ui.card(title="自我察觉",chip=if(AwarenessRuntime.active) "监督" else "伙伴") {
+            awarenessStatus=ui.text("")
+            ui.caption("监督模式：每5分钟一句小问、每10分钟四问复盘；断网也会提问并保存。可以跳过，或用输入法语音回答。")
+            if(AwarenessRuntime.active) ui.secondary("停止监督，回到伙伴模式") {AwarenessRuntime.stop()}
+            else {
+                val options=listOf(30,60,120,240);var selected=1
+                ui.choice(options.map {"$it 分钟"},selected) {selected=it}
+                ui.primary("开启监督模式") {AwarenessRuntime.start(options[selected])}
+            }
+            ui.caption(if(Engine.watchConnected) "无障碍已连接：可记录应用时间线。" else "无障碍未连接：应用时长可能缺失，回答仍会保存。")
+            val shot=CheckBox(this).apply {text="察觉时截一张图（Android 11+，仅本机）";isChecked=store.screenshots;setOnCheckedChangeListener {_,v->store.screenshots=v}}
+            val voice=CheckBox(this).apply {text="察觉时语音提醒（TTS，不占麦克风）";isChecked=store.voice;setOnCheckedChangeListener {_,v->store.voice=v}}
+            // A Ui card owns the parent of its last text field.
+            (awarenessStatus!!.parent as LinearLayout).apply {addView(shot);addView(voice)}
+            store.pending()?.let {row->ui.secondary("接着回答未完成的察觉") {ObservationActivity.start(this,row.getString("id"))}}
+            ui.quiet("本地记录与导出") {ObservationActivity.start(this)}
+            ui.quiet("补发待同步记录") {AwarenessRuntime.sync();toast("正在尝试同步，成功确认后才会移出队列")}
+        }
+    }
+
+    // ───────────── 拦截娱乐 App（内置，不依赖外部拦截器） ─────────────
+
+    private fun blockTileValue(): String {
+        val b = Engine.store.blocking()
+        return when {
+            !b.enabled -> "已关"
+            b.blocked.isEmpty() -> "没选 App"
+            !A11yGuard.isOn(this) -> "无障碍没开"
+            else -> "拦 ${b.blocked.size} 个"
+        }
+    }
+
+    private fun blockTileTone(): Tone {
+        val b = Engine.store.blocking()
+        return when {
+            !b.enabled -> Tone.NEUTRAL
+            !A11yGuard.isOn(this) -> Tone.BAD
+            b.blocked.isEmpty() -> Tone.WARN
+            else -> Tone.OK
+        }
+    }
+
+    private fun blockingCard() {
+        val b = Engine.store.blocking()
+        val a11y = A11yGuard.isOn(this)
+        ui.card(
+            title = "拦截娱乐 App",
+            chip = if (b.enabled) "开着" else "关着",
+            tone = if (b.enabled && a11y) Tone.OK else Tone.WARN,
+        ) {
+            ui.caption("打开下面这些 App 时，我把你送回桌面、弹一道题；答对才放行一段时间。拦截和判卷都在本 APP 里，不用再装别的拦截器。")
+            ui.spacer(6f)
+            ui.choice(listOf("关", "开"), if (b.enabled) 1 else 0) { i ->
+                Engine.store.saveBlocking(b.copy(enabled = i == 1))
+                Intercept.invalidate()
+                KeepAliveService.sync(this)
+                render(force = true)
+            }
+            ui.divider()
+            val names = b.blocked.map { label(it) }
+            ui.text(
+                if (names.isEmpty()) "还没选要拦的 App。"
+                else "拦着 ${names.size} 个：${names.take(4).joinToString("、")}${if (names.size > 4) " 等" else ""}",
+                14f, Palette.light.text, top = 2f,
+            )
+            ui.secondary(if (names.isEmpty()) "选择要拦的 App" else "改一下拦哪些") { pickApps() }
+            ui.divider()
+            ui.caption("答对之后放行多久（分钟；同一个 App 当天重复打开会递减，最少 1 分钟）")
+            val options = listOf(1, 3, 5, 10, 20, 30)
+            ui.choice(options.map { "$it" }, options.indexOf(b.minutes).takeIf { it >= 0 } ?: 3) { i ->
+                Engine.store.saveBlocking(Engine.store.blocking().copy(minutes = options[i]))
+                Intercept.invalidate()
+            }
+            ui.divider()
+            val today = java.time.LocalDate.now().toString()
+            val usedToday = if (b.day == today) b.grantedToday.values.sum() else 0
+            ui.caption("每天最多放行（所有被拦 App 合计；今天已用 $usedToday 分钟）")
+            val quotas = listOf(0, 15, 30, 60)
+            ui.choice(quotas.map { if (it == 0) "不限" else "$it" }, quotas.indexOf(b.dailyMinutes).takeIf { it >= 0 } ?: 2) { i ->
+                Engine.store.saveBlocking(Engine.store.blocking().copy(dailyMinutes = quotas[i]))
+                Intercept.invalidate()
+                render(force = true)
+            }
+            ui.divider()
+            ui.caption("答案至少多少个字（带因果/原文/数字的回答可豁免）")
+            val charOptions = listOf(15, 30, 50)
+            ui.choice(charOptions.map { "$it" }, charOptions.indexOf(b.minChars).takeIf { it >= 0 } ?: 0) { i ->
+                Engine.store.saveBlocking(Engine.store.blocking().copy(minChars = charOptions[i]))
+                Intercept.invalidate()
+            }
+            ui.divider()
+            ui.caption("夜间禁用（23:00–06:00，答对也不放行）")
+            ui.choice(listOf("关", "开"), if (b.nightBan) 1 else 0) { i ->
+                Engine.store.saveBlocking(Engine.store.blocking().copy(nightBan = i == 1))
+                Intercept.invalidate()
+                render(force = true)
+            }
+            if (b.enabled && !a11y) ui.callout("无障碍没开，现在只靠使用情况兜底；去下面「要的权限」打开它。", Tone.WARN)
+            if (b.enabled && !UsageMonitor.hasPermission(this)) ui.callout("「使用情况访问」没开：无障碍掉线时就没有兜底了。", Tone.WARN)
+        }
+    }
+
+    private fun pickApps() {
+        val apps = launchableApps()
+        if (apps.isEmpty()) { toast("没找到可启动的 App"); return }
+        val blocked = Engine.store.blocking().blocked.toSet()
+        val checked = BooleanArray(apps.size) { apps[it].first in blocked }
+        AlertDialog.Builder(this)
+            .setTitle("选择要拦的 App")
+            .setMultiChoiceItems(apps.map { it.second }.toTypedArray(), checked) { _, i, v -> checked[i] = v }
+            .setPositiveButton("保存") { _, _ ->
+                val picked = apps.filterIndexed { i, _ -> checked[i] }.map { it.first }
+                Engine.store.saveBlocking(Engine.store.blocking().copy(blocked = picked))
+                Intercept.invalidate()
+                render(force = true)
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    private fun launchableApps(): List<Pair<String, String>> {
+        val i = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        return packageManager.queryIntentActivities(i, 0)
+            .mapNotNull { ri ->
+                val pkg = ri.activityInfo?.packageName ?: return@mapNotNull null
+                if (pkg == packageName) return@mapNotNull null
+                pkg to runCatching { ri.loadLabel(packageManager).toString() }.getOrDefault(pkg)
+            }
+            .distinctBy { it.first }
+            .sortedBy { it.second }
+    }
+
+    // ───────────── 别让它被系统关掉（无障碍自愈） ─────────────
+
+    private fun guardCard() {
+        val on = A11yGuard.isOn(this)
+        val canWrite = A11yGuard.canWriteDirectly(this)
+        val shOn = Shell.available()
+        val shGranted = Shell.granted()
+        val owner = DriverDeviceAdmin.isOwner(this)
+        val guarding = KeepAliveService.running
+        ui.card(
+            title = "别让它被系统关掉",
+            chip = when {
+                on && guarding -> "守护中"
+                on -> "已开"
+                else -> "未开"
+            },
+            tone = if (on && (canWrite || shGranted || owner || guarding)) Tone.OK else if (on) Tone.WARN else Tone.BAD,
+        ) {
+            ui.caption("无障碍是绑在进程上的：被划掉或被强制停止后，系统会把它从已启用列表里删掉。下面几层决定它多久能自己回来。")
+            ui.permission("无障碍服务", on, "拦截靠它读前台包名；关着就完全不拦。") {
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            }
+            ui.divider()
+            ui.permission(
+                "写系统设置", canWrite,
+                if (shGranted) "还没授予。下面那个按钮可以借 Shizuku 一次授予，之后就再也不麻烦它了。"
+                else "没授予，Shizuku 也没连上，所以现在只能靠手动重开。",
+            ) {
+                if (shGranted) {
+                    A11yGuard.harden(this) { ok ->
+                        main.post {
+                            toast(if (ok) "已授予，以后能自己写回无障碍" else "授权失败，看看 Shizuku 还连着没有")
+                            render(force = true)
+                        }
+                    }
+                } else toast("先打开 Shizuku 并授权")
+            }
+            ui.divider()
+            ui.permission(
+                "Shizuku", shGranted,
+                if (!shOn) "没连上：重启手机后要在 Shizuku 里重新启动一次服务。" else "已连上，还没授权给本 APP。",
+            ) {
+                if (shOn) { Shell.request(); main.postDelayed({ render(force = true) }, 1_500) } else toast("先打开 Shizuku")
+            }
+            ui.divider()
+            ui.permission(
+                "设备所有者（可选）", owner,
+                if (owner) "已启用：不依赖 Shizuku 也能直接写回无障碍。"
+                else "没启用。点一下复制 adb 命令，用电脑执行一次；设置前要删掉手机里的账号。",
+            ) {
+                val cmd = DriverDeviceAdmin.adbCommand(this)
+                getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("adb", cmd))
+                toast("已复制：$cmd")
+            }
+            if (owner) {
+                val blocked = runCatching {
+                    getSystemService(android.app.admin.DevicePolicyManager::class.java)
+                        ?.isUninstallBlocked(DriverDeviceAdmin.component(this), packageName) == true
+                }.getOrDefault(false)
+                ui.secondary(if (blocked) "已禁止卸载（点一下恢复）" else "禁止卸载（设备所有者）") {
+                    val next = !blocked
+                    val ok = DriverDeviceAdmin.setUninstallBlocked(this, next)
+                    toast(if (ok) (if (next) "已禁止卸载" else "已恢复可卸载") else "系统拒绝了")
+                    render(force = true)
+                }
+            }
+            ui.divider()
+            ui.caption("同时看住总控/一手的无障碍（只追加，不关别人；需要写系统设置或设备所有者）")
+            val peer = Engine.store.settings().peerGuard
+            ui.choice(listOf("关", "开"), if (peer) 1 else 0) { i ->
+                Engine.store.saveSettings(Engine.store.settings().copy(peerGuard = i == 1))
+                KeepAliveService.sync(this)
+                render(force = true)
+            }
+            ui.spacer(6f)
+            ui.callout(A11yGuard.describe(this), if (on && (canWrite || shGranted || owner)) Tone.OK else Tone.WARN)
+            ui.text(
+                if (guarding) "常驻守护：运行中，亮屏每 15 秒、熄屏每 60 秒查一次。"
+                else "常驻守护：未运行。拦截开着时会自动启动。",
+                13f, Palette.light.textSecondary, top = 8f, bottom = 0f,
+            )
+            ui.footnote("另有 5 分钟闹钟和 15 分钟 JobScheduler 兜底；开机、解锁、装包、改时间后都会复查。强制停止打不过，只能等下次打开 APP。")
+        }
+    }
+
+    // ───────────── 要的权限 ─────────────
+
+    // ───────────── 权限 ─────────────
+
+    private fun permissionCard() {
+        val pm = getSystemService(PowerManager::class.java)
+        val settings = Engine.store.settings()
+        val installed = settings.anchors.filter { Engine.isInstalled(this, it) }
+        ui.card(title = "要的权限") {
+            ui.permission(
+                "悬浮窗", Settings.canDrawOverlays(this),
+                "用来把卡片浮在 Live 上面；没有也能用，只是改成普通页面。",
+            ) {
+                startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+            }
+            ui.divider()
+            ui.permission(
+                "不被省电杀掉", pm?.isIgnoringBatteryOptimizations(packageName) == true,
+                "陪练要在后台一直跑。小米 / 华为还要在系统设置里手动开「自启动」「后台弹出界面」。",
+            ) {
+                runCatching { startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName"))) }
+            }
+            ui.divider()
+            val usage = UsageMonitor.hasPermission(this)
+            ui.permission(
+                "使用情况访问", usage,
+                if (usage) "无障碍掉线时用它兜底判断前台 App，仍然能拦。"
+                else "去系统设置里给「思维驾驶员」打开；没有它，无障碍一掉就完全拦不住。",
+            ) {
+                runCatching { startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }
+            }
+            ui.divider()
+            ui.text(
+                if (installed.isEmpty()) "「回到 Live」暂时没有可打开的应用，装 Gemini 或 ChatGPT 后自动认。"
+                else "「回到 Live」会打开 ${label(installed.first())}。",
+                13f, Palette.light.textSecondary, bottom = 0f,
+            )
+        }
+    }
+
+    // ───────────── 直连大模型（OpenAI 兼容网关） ─────────────
+
+    private fun llmCard() {
+        val store = Engine.store
+        val c = store.llmConfig()
+        ui.card(
+            title = "直连大模型",
+            chip = if (c.ready) "已启用" else if (c.enabled) "缺 key" else "关着",
+            tone = if (c.ready) Tone.OK else Tone.NEUTRAL,
+        ) {
+            ui.caption("不依赖大肥鱼，直接连一个 OpenAI 兼容网关来出题。key 用系统密钥库加密存在本机，不上传、不进日志；关掉或连不上时自动回落模板。")
+            ui.spacer(6f)
+            ui.choice(listOf("关", "开"), if (c.enabled) 1 else 0) { i ->
+                store.saveLlmConfig(store.llmConfig().copy(enabled = i == 1))
+                render(force = true)
+            }
+            ui.divider()
+            ui.caption("网关地址")
+            val base = ui.field("https://…", c.baseUrl)
+            ui.caption("主模型（正常推进时用）")
+            val brainModel = ui.field("gemini-4-argon", c.brainModel)
+            ui.caption("轻模型（限速/逃逸时出原子动作用）")
+            val lightModel = ui.field("gemini-2.5-flash-nothinking", c.lightModel)
+            ui.caption("API key（${if (c.apiKey.isNotBlank()) "已加密保存，留空则不改" else "未填"}）")
+            val key = ui.field("sk-…", "")
+            key.inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            ui.primary("保存") {
+                store.saveLlmConfig(c.copy(
+                    baseUrl = base.text.toString().trim().ifBlank { Store.DEFAULT_GATEWAY },
+                    brainModel = brainModel.text.toString().trim().ifBlank { "gemini-4-argon" },
+                    lightModel = lightModel.text.toString().trim().ifBlank { "gemini-2.5-flash-nothinking" },
+                    apiKey = key.text.toString().trim(),
+                ))
+                key.setText("")
+                toast("已保存")
+                render(force = true)
+            }
+            ui.secondary("测试连接") {
+                val cfg = store.llmConfig()
+                if (!cfg.ready) { toast("先开启并保存 key"); return@secondary }
+                toast("测试中…")
+                Thread {
+                    val r = GatewayBrain.test(cfg)
+                    main.post { toast(r.fold({ "网关正常：$it" }, { it.message ?: "失败" })) }
+                }.start()
+            }
+            if (c.apiKey.isNotBlank()) {
+                ui.quiet("清除 key", Palette.light.danger) {
+                    store.clearLlmKey()
+                    toast("已清除 key")
+                    render(force = true)
+                }
+            }
+        }
+    }
+
+    // ───────────── 连接大肥鱼（DSH Go） ─────────────
+
+    private fun linkTileValue(): String {
+        if (Engine.store.llmConfig().ready) return "网关已配"
+        val pairing = Engine.store.pairing() ?: return "模板"
+        val p = ping ?: return if (pinging) "检查中" else "已配对"
+        return if (p.ok) "已连上" else "连不上"
+    }
+
+    private fun linkTileTone(): Tone {
+        if (Engine.store.llmConfig().ready) return Tone.OK
+        Engine.store.pairing() ?: return Tone.NEUTRAL
+        val p = ping ?: return Tone.NEUTRAL
+        return if (p.ok) Tone.OK else Tone.BAD
+    }
+
+    private fun linkCard() {
+        val store = Engine.store
+        val pairing = store.pairing()
+        val p = ping
+        ui.card(
+            title = "大肥鱼（可选）",
+            chip = when {
+                pairing == null -> "未配对"
+                p?.ok == true -> "已连上"
+                p == null -> "已配对"
+                else -> "连不上"
+            },
+            tone = when {
+                pairing == null || p == null -> Tone.NEUTRAL
+                p.ok -> Tone.OK
+                else -> Tone.BAD
+            },
+        ) {
+            if (pairing == null) {
+                ui.caption("连上之后追问由它结合自己的记忆来写；不连也能用，追问用模板。")
+                ui.text("① 复制安装说明，发给大肥鱼。它会自己装好插件，回你一个配对码。", 13.5f, Palette.light.textSecondary, top = 8f)
+                ui.secondary("复制安装说明") {
+                    getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("安装说明", Install.TEXT))
+                    toast("已复制。打开 DSH Go，粘贴发给大肥鱼。")
+                }
+                ui.spacer(6f)
+                ui.caption("② 把配对码填在这里")
+                val code = ui.field("例：3080:K7PQ-M3XA")
+                ui.primary("配对") {
+                    val text = code.text.toString()
+                    Thread {
+                        val r = DshLink.pair(text, Build.MODEL ?: "phone")
+                        r.onSuccess { store.savePairing(it) }
+                        main.post {
+                            toast(r.fold({ "配对成功" }, { it.message ?: "配对失败" }))
+                            render(force = true)
+                            checkLink()
+                        }
+                    }.start()
+                }
+                return@card
+            }
+            when {
+                pinging && p == null -> ui.caption("正在检查连接…")
+                p == null -> ui.text("已配对，端口 ${pairing.port}。", 13.5f, Palette.light.textSecondary)
+                !p.ok -> ui.callout(p.error.orEmpty().ifBlank { "连不上大肥鱼" }, Tone.BAD)
+                else -> {
+                    ui.callout("已连上，它的记忆 ${p.memories} 条。", Tone.OK)
+                    if (p.brainConfigured) {
+                        ui.text("出题对话已指定。", 13.5f, Palette.light.textSecondary)
+                    } else {
+                        ui.callout("还没指定出题的对话：在 DSH Go 里打开想让它出题的那个对话，说一句「驾驶员就用这个会话」。", Tone.WARN)
+                    }
+                }
+            }
+            ui.secondary("检查连接") { checkLink() }
+            ui.quiet("解除配对", Palette.light.danger) {
+                AlertDialog.Builder(this).setTitle("解除和大肥鱼的配对？")
+                    .setMessage("之后追问改用模板。要再连，需要让大肥鱼重新生成配对码。")
+                    .setPositiveButton("解除") { _, _ -> store.clearPairing(); ping = null; render(force = true) }
+                    .setNegativeButton("取消", null).show()
+            }
+        }
+    }
+
+    private fun checkLink() {
+        val pairing = Engine.store.pairing() ?: return
+        if (pinging) return
+        pinging = true
+        Thread {
+            val r = DshLink.ping(pairing)
+            if(r.ok) AwarenessRuntime.sync(alreadyPinged=true)
+            ping = r
+            pinging = false
+            main.post { if (!Engine.locked) render(force = true) }
+        }.start()
+    }
+
+    // ───────────── 主线与死穴 ─────────────
+
+    private fun profileCard() {
+        val p = Engine.store.profile()
+        ui.card(title = "我的主线和老毛病") {
+            ui.caption("驾驶员追问时会点破这两样。一行一条。")
+            ui.spacer(8f)
+            val goals = ui.field("主线目标，例：12 月省考行测", p.goals.joinToString("\n"), multiline = true, lines = 2)
+            ui.spacer(4f)
+            val habits = ui.field("惯性死穴，例：抓到一半就下结论", p.habits.joinToString("\n"), multiline = true, lines = 2)
+            ui.secondary("保存") {
+                fun lines(e: EditText) = e.text.toString().lines().map { it.trim() }.filter { it.isNotEmpty() }.take(8)
+                Engine.store.saveProfile(Profile(lines(goals), lines(habits)))
+                toast("已保存")
+                render(force = true)
+            }
+        }
+    }
+
+    // ───────────── 上一次 + 还挂着的 ─────────────
+
+    private fun historyCards() {
+        val store = Engine.store
+        store.last()?.let { l ->
+            val how = when {
+                l.reason == "completed" -> "完成"
+                l.reason.startsWith("stopped") -> "主动结束"
+                else -> "没给出结论"
+            }
+            ui.card(title = "上一次", chip = how, tone = if (l.reason == "completed") Tone.OK else Tone.NEUTRAL) {
+                ui.text(l.task.ifBlank { l.topic }.ifBlank { "没写主题" }, 15.5f, Palette.light.text, bottom = 2f)
+                ui.spacer(6f)
+                ui.stats(listOf("${l.summary.grounded}" to "有依据", "${l.summary.responded}" to "回应"))
+                l.conclusion?.takeIf { it.isNotBlank() }?.let { ui.callout(it, Tone.NEUTRAL) }
+            }
+        }
+        val open = store.agenda().open()
+        if (open.isNotEmpty()) {
+            ui.card(title = "还挂着没解决的", chip = "${open.size} 条", tone = Tone.NEUTRAL) {
+                open.take(6).forEach { item -> ui.item(item.text, item.anchor.takeIf { a -> a.isNotBlank() }) }
+                if (open.size > 6) ui.caption("另外还有 ${open.size - 6} 条，下次开同一主题会先问起。")
+                else ui.caption("下次开同一个主题，第一问就会问你要不要接着做。")
+            }
+        }
+    }
+
+    // ───────────── 诊断 ─────────────
+
+    private fun diagnosticsCard() {
+        ui.card(title = "诊断", muted = true) {
+            if (!A11yGuard.isOn(this)) {
+                ui.caption("打开思维驾驶员无障碍后，可记录应用时间线，并按已选名单拦截应用。")
+                ui.quiet("去打开无障碍", Palette.light.accent) { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+                return@card
+            }
+            val list = Engine.recentForeground()
+            if (list.isEmpty()) {
+                ui.caption("还没有记录。切几个应用再回来。")
+                return@card
+            }
+            val fmt = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
+            list.take(8).forEach { seen ->
+                ui.text("${fmt.format(java.util.Date(seen.at))}   ${label(seen.pkg)}", 12.5f, Palette.light.textSecondary, bottom = 1f)
+            }
+        }
+    }
+
+    // ───────────── 对话框 / 杂项 ─────────────
+
+    private fun askPause() {
+        val m = intArrayOf(3, 5, 10, 20)
+        AlertDialog.Builder(this).setTitle("休息多久？到点会把你拉回断点")
+            .setItems(m.map { "$it 分钟" }.toTypedArray()) { _, i -> Engine.pause(m[i]) }.show()
+    }
+
+    private fun confirmStop() {
+        AlertDialog.Builder(this).setTitle("结束这次陪练？")
+            .setMessage("会记为主动结束，不算完成。")
+            .setPositiveButton("结束") { _, _ -> Engine.stop("emergency") }
+            .setNegativeButton("不结束", null).show()
+    }
+
+    private fun toast(t: String) = Toast.makeText(this, t, Toast.LENGTH_LONG).show()
+
+    private fun label(pkg: String) = runCatching {
+        packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
+    }.getOrDefault(pkg)
+}

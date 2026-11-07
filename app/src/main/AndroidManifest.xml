@@ -1,0 +1,403 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- 只连本机的 DSH Go 引擎（127.0.0.1），见 res/xml/network_security.xml -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- 融合并集：一手/总控 -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- 无障碍掉线时用「使用情况访问」兜底判断前台 App；用户在系统设置里授权 -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- 无障碍被系统关掉后自己写回去。只能用 adb / Shizuku 授予，APP 内申请不到。
+         有了它就不必每次都走 Shizuku；没有时退回 Shizuku 执行 settings put。 -->
+    <uses-permission
+        android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
+    <!-- 向 Shizuku 申请 shell 权限 -->
+    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
+
+    <!-- 包可见性：不声明就拿不到 Live 应用的启动入口，"回到 Live"会失效 -->
+    <queries>
+        <package android:name="com.google.android.apps.bard" />
+        <package android:name="com.google.android.googlequicksearchbox" />
+        <package android:name="com.openai.chatgpt" />
+        <package android:name="io.github.ccch1mneyyy.dsh_app" />
+        <!-- 可选互保：判断总控/一手装没装 -->
+        <package android:name="com.zongkong.app" />
+        <package android:name="com.yishou.app" />
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.tts.TTS_SERVICE" />
+        </intent>
+        <!-- 一手/总控的包可见性并集 -->
+        <package android:name="notion.id" />
+        <package android:name="com.larus.nova" />
+        <package android:name="com.deepseek.chat" />
+        <package android:name="com.moonshot.kimichat" />
+        <package android:name="com.fenbi.android.servant" />
+        <package android:name="com.zongkong.sentinel" />
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="text/plain" />
+        </intent>
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".ChangliuApp"
+        android:allowBackup="false"
+        android:icon="@drawable/ic_driver"
+        android:label="@string/app_name"
+        android:networkSecurityConfig="@xml/network_security"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Driver">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- 统一壳：唯一启动器入口（阶段四继续长成首页/训练/四部/我的） -->
+        <activity
+            android:name=".ui.ChangliuShellActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- 它记得什么：查看/删除/暂停长期记忆 -->
+        <activity
+            android:name=".ui.MemoryActivity"
+            android:exported="false"
+            android:label="长流 · 记忆" />
+
+        <!-- 一手页面（融合后由统一壳进入；暂不占启动器） -->
+        <activity
+            android:name="com.yishou.app.MainActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
+            android:name="com.yishou.app.share.ShareActivity"
+            android:exported="true"
+            android:label="收进长流"
+            android:excludeFromRecents="true"
+            android:taskAffinity="com.changliu.app.share"
+            android:theme="@style/Theme.Yishou.Sheet">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+                <data android:mimeType="application/msword" />
+                <data android:mimeType="application/pdf" />
+                <data android:mimeType="text/*" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name="com.yishou.app.window.WindowActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
+            android:name="com.yishou.app.floating.FloatingReplyActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.changliu.app.reply"
+            android:theme="@style/Theme.Yishou.Sheet"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
+            android:name="com.yishou.app.scroll.ScrollActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity="com.changliu.app.scroll"
+            android:theme="@style/Theme.Yishou.Clear" />
+        <!-- 一手的入口思考页：由统一无障碍服务的 YsGateLink 拉起（关注名单） -->
+        <activity
+            android:name="com.yishou.app.gate.GateActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.changliu.app.ysgate"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- 总控的严管拦截页 / 低屏做题页：由 ZkGateLink 拉起 -->
+        <activity
+            android:name="com.zongkong.app.guard.BlockActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.changliu.app.zkblock"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
+            android:name="com.zongkong.app.guard.GateActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.changliu.app.zkguard"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.Zongkong" />
+
+        <!-- 总控页面（融合后由统一壳进入） -->
+        <activity
+            android:name="com.zongkong.app.ui.MainActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity android:name=".ObservationActivity" android:exported="false"
+            android:excludeFromRecents="true" android:taskAffinity="com.changliu.app.observation"
+            android:theme="@style/Theme.Driver.Card" android:windowSoftInputMode="adjustResize" />
+
+        <!-- 断点卡 / 强提醒页：独立任务栈，盖在被切去的应用上；不进最近任务 -->
+        <activity
+            android:name=".CardActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.changliu.app.card"
+            android:theme="@style/Theme.Driver.Card"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- 拦截门：拦下娱乐 App 后由无障碍服务拉起来答题。
+             不进最近任务（划不掉，这是和 Curbox 那套最大的区别）、独立任务栈、singleTask 防止叠出好几层。 -->
+        <activity
+            android:name=".infra.gate.GateActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.changliu.app.gate"
+            android:theme="@style/Theme.Driver.Card"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density|fontScale|locale|layoutDirection" />
+
+        <!-- 唯一常驻服务：陪练/锁定的前台服务 + 拦截守护（15s/60s 自愈）合成一个 -->
+        <service
+            android:name=".infra.keepalive.KeepAliveService"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="用户开启陪练/锁定或拦截监督后，保持切屏检测与无障碍自愈在后台持续运行" />
+        </service>
+
+        <!-- 一手的前台服务（看屏 / 刷着练 / 陪练窗口 / 语音 / 壁纸）。
+             窗口与伴读的保活职责后续并入 KeepAliveService（实施计划 §5.4）。 -->
+        <service
+            android:name="com.yishou.app.look.ScreenLookService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+        <service
+            android:name="com.yishou.app.scroll.ScrollService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+        <service
+            android:name="com.yishou.app.scroll.ScrollTile"
+            android:exported="true"
+            android:icon="@drawable/ic_stat_yishou"
+            android:label="考我一下"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+        <service
+            android:name="com.yishou.app.window.WindowService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="用户主动开启的学习陪练计时：倒计时、朗读问题和无回应提醒，窗口结束即停止" />
+        </service>
+        <service
+            android:name="com.yishou.app.partner.PartnerVoiceService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+        <service
+            android:name="com.yishou.app.partner.PartnerService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="用户主动开始的外部伴读计时和离开提醒：只观察前台包名，不录音，到点停止" />
+        </service>
+        <service
+            android:name="com.yishou.app.wallpaper.BoardWallpaperService"
+            android:exported="true"
+            android:label="长流 · 局面壁纸"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter>
+                <action android:name="android.service.wallpaper.WallpaperService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.wallpaper"
+                android:resource="@xml/wallpaper" />
+        </service>
+
+        <service
+            android:name=".infra.a11y.ChangliuA11yService"
+            android:exported="false"
+            android:label="@string/a11y_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/watch_service" />
+        </service>
+
+        <!-- 看门狗：无障碍被关掉、进程又被杀时，靠它定期把服务写回去（JobScheduler 最短 15 分钟） -->
+        <service
+            android:name=".WatchdogJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
+        <!-- 常驻守护已并入 KeepAliveService（实施计划 §5.4） -->
+
+        <!-- 服务被系统清掉后的 5 分钟兜底闹钟 -->
+        <receiver
+            android:name=".infra.keepalive.KeepAlarmReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!-- 设备所有者（可选）：用 dpm set-device-owner 授予后，不依赖 Shizuku 也能写回无障碍 -->
+        <receiver
+            android:name=".DriverDeviceAdmin"
+            android:exported="true"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 重启、覆盖安装后把无障碍写回来 -->
+        <receiver
+            android:name=".BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 一手：桌面题板、窗口闹钟、提醒、开机重排 -->
+        <receiver
+            android:name="com.yishou.app.widget.BoardWidget"
+            android:exported="true"
+            android:label="长流 · 题板">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_board_info" />
+        </receiver>
+        <receiver android:name="com.yishou.app.window.WindowAlarmReceiver" android:exported="false" />
+        <receiver android:name="com.yishou.app.system.ReminderReceiver" android:exported="false" />
+        <receiver
+            android:name="com.yishou.app.window.RescheduleReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 总控：提醒、通知里回复、桌面宠物、开机重排 -->
+        <receiver android:name="com.zongkong.app.system.ReminderReceiver" android:exported="false" />
+        <receiver android:name="com.zongkong.app.system.ReplyReceiver" android:exported="false" />
+        <receiver
+            android:name="com.zongkong.app.system.PetWidget"
+            android:exported="true"
+            android:label="长流 · 宠物">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/pet_widget" />
+        </receiver>
+        <receiver
+            android:name="com.zongkong.app.system.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 拍照/分享用的临时文件：一手缓存图 + 总控交付照片 -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.changliu.app.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+        <!-- 总控与一手都按 context.packageName + ".files" 取 authority，融合后统一到 com.changliu.app.files -->
+    </application>
+</manifest>

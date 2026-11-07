@@ -1,0 +1,108 @@
+--- a/legacy/zongkong/app/src/main/java/com/zongkong/app/ui/PermissionsScreen.kt	2026-10-26 00:40:13.000000000 +0800
++++ b/legacy/zongkong/app/src/main/java/com/zongkong/app/ui/PermissionsScreen.kt	2026-11-07 13:10:11.689926000 +0800
+@@ -61,7 +61,18 @@
+  *   - 哨兵：区分「未接入 / 未知 / 无障碍未开启 / 在响应 / 失联」五种，不合并成一个绿点。
+  */
+ object PermissionStatus {
++    /**
++     * 融合桥：由 :app 的 ChangliuApp 设成「唯一无障碍服务是否在跑」。
++     * 总控自己的 GuardService 不再注册，融合后用这个口子判断。
++     */
++    @Volatile
++    var fusionA11y: ((Context) -> Boolean)? = null
++
++    private fun fused(context: Context): Boolean =
++        runCatching { fusionA11y?.invoke(context) == true }.getOrDefault(false)
++
+     fun accessibility(context: Context): Boolean {
++        if (fused(context)) return true
+         val enabled = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+             ?: return false
+         val me = ComponentName(context, GuardService::class.java)
+@@ -72,25 +83,32 @@
+      * 无障碍「真的在干活」：只看真实 dispatcherAck + 事件进度（v2）。
+      *
+      * 以前这里是 `GuardService.running || 心跳 90 秒内` —— 那两条都会被「进程活着但执行线程
+-     * 卡死」骗过（报告 §3.2）。现在统一走共享内核的 HealthEvaluator。
++     * 卡死」骗过（报告 §3.2）。现在统一走共享内核的 HealthEvaluator；
++     * 融合后统一服务在跑就直接算健康。
+      */
+-    fun guardRunning(context: Context): Boolean = healthStatus(context) == HealthStatus.HEALTHY
++    fun guardRunning(context: Context): Boolean = fused(context) || healthStatus(context) == HealthStatus.HEALTHY
+ 
+     /** 健康状态（给界面用）。读不到 → UNKNOWN，不猜。 */
+-    fun healthStatus(context: Context): HealthStatus = try {
+-        GuardHealth.init(context)
+-        GuardHealth.verdict(GuardHealth.permissionEnabled(context)).status
+-    } catch (_: Throwable) {
+-        HealthStatus.UNKNOWN
++    fun healthStatus(context: Context): HealthStatus {
++        if (fused(context)) return HealthStatus.HEALTHY
++        return try {
++            GuardHealth.init(context)
++            GuardHealth.verdict(GuardHealth.permissionEnabled(context)).status
++        } catch (_: Throwable) {
++            HealthStatus.UNKNOWN
++        }
+     }
+ 
+     /** 一句话：状态 + 原因（不涂绿）。 */
+-    fun healthText(context: Context): String = try {
+-        GuardHealth.init(context)
+-        val v = GuardHealth.verdict(GuardHealth.permissionEnabled(context))
+-        "${HealthLabels.status(v.status)}（${v.reason}）"
+-    } catch (_: Throwable) {
+-        "未知：读不到健康状态"
++    fun healthText(context: Context): String {
++        if (fused(context)) return "长流融合无障碍在运行"
++        return try {
++            GuardHealth.init(context)
++            val v = GuardHealth.verdict(GuardHealth.permissionEnabled(context))
++            "${HealthLabels.status(v.status)}（${v.reason}）"
++        } catch (_: Throwable) {
++            "未知：读不到健康状态"
++        }
+     }
+ 
+     fun notifications(context: Context) = Notifications.canPost(context)
+@@ -136,22 +154,26 @@
+     }
+ 
+     /** 必需的权限里缺了哪些（首页顶上提示用）。 */
+-    fun missingCritical(context: Context): List<String> = buildList {
+-        if (!accessibility(context)) {
+-            add("无障碍服务")
+-        } else {
+-            when (healthStatus(context)) {
+-                HealthStatus.HEALTHY -> {}
+-                HealthStatus.UNKNOWN -> add("无障碍（未知：还没有真实响应）")
+-                HealthStatus.DISABLED -> add("无障碍（系统里被关掉了）")
+-                else -> add("无障碍（开着但没有真实响应）")
++    fun missingCritical(context: Context): List<String> {
++        // 融合后唯一的无障碍服务在跑，就由它承担拦截/叫醒；不再拿旧 GuardService/哨兵吓自己。
++        if (fused(context)) return emptyList()
++        return buildList {
++            if (!accessibility(context)) {
++                add("无障碍服务")
++            } else {
++                when (healthStatus(context)) {
++                    HealthStatus.HEALTHY -> {}
++                    HealthStatus.UNKNOWN -> add("无障碍（未知：还没有真实响应）")
++                    HealthStatus.DISABLED -> add("无障碍（系统里被关掉了）")
++                    else -> add("无障碍（开着但没有真实响应）")
++                }
+             }
++            if (!deviceAdmin(context).active) add("设备管理员（不能独立锁屏）")
++            if (!sentinel(context)) add("哨兵（${sentinelText(context)}）")
++            if (!notifications(context)) add("通知")
++            if (!exactAlarm(context)) add("准点闹钟")
++            if (!fullScreen(context)) add("全屏通知")
+         }
+-        if (!deviceAdmin(context).active) add("设备管理员（不能独立锁屏）")
+-        if (!sentinel(context)) add("哨兵（${sentinelText(context)}）")
+-        if (!notifications(context)) add("通知")
+-        if (!exactAlarm(context)) add("准点闹钟")
+-        if (!fullScreen(context)) add("全屏通知")
+     }
+ }
+ 

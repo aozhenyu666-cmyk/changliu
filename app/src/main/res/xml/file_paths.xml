@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 融合并集：一手拍照缓存的 images/ + 总控交付证据的 proofs/ -->
+<paths>
+    <cache-path name="images" path="images/" />
+    <files-path name="proofs" path="proofs/" />
+</paths>
