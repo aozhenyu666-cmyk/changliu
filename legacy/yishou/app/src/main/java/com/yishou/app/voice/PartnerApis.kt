@@ -1,7 +1,7 @@
 package com.yishou.app.voice
 
-import com.yishou.app.llm.ChatClient
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.ChatClient
+import com.changliu.infra.llm.LlmResult
 import com.yishou.app.speech.SpeechApi
 import com.yishou.app.speech.SpeechEndpoint
 

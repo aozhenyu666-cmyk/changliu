@@ -14,8 +14,8 @@ android {
         applicationId = "com.changliu.app"
         minSdk = 26 // 播放状态回调（AudioPlaybackCallback）要 Android 8.0
         targetSdk = 34
-        versionCode = 7
-        versionName = "0.7.0-fusion"
+        versionCode = 12
+        versionName = "0.8.4-hub-P3P4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // 一手 mainline/chalu flavor 暂不引入（实施计划 §6.4），统一走 mainline 行为
         buildConfigField("boolean", "CHALU", "false")
@@ -69,6 +69,7 @@ ksp {
 
 dependencies {
     implementation(project(":core"))
+    implementation(project(":infra"))
     implementation(project(":ys"))
     implementation(project(":zk"))
 

@@ -25,8 +25,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.changliu.app.BuildConfig
 import com.changliu.app.brain.VoiceNudge
+import com.changliu.app.ui.ConstraintsActivity
 import com.changliu.app.ui.MemoryActivity
 import com.changliu.app.ui.Openers
+import com.changliu.app.ui.UnifiedSettingsActivity
 import com.changliu.app.ui.ShellSnap
 import com.changliu.app.ui.components.ChangliuCard
 import com.changliu.app.ui.components.EntryRow
@@ -67,6 +69,21 @@ fun MeScreen(snap: ShellSnap) {
                 onClick = { ctx.startActivity(Intent(ctx, MemoryActivity::class.java)) },
             )
             VoiceRow(ctx)
+        }
+
+        SectionHeader("集成")
+        ChangliuCard {
+            EntryRow(
+                "约束",
+                "统一名单 / 四种模式 / 同步回三端",
+                onClick = { ctx.startActivity(Intent(ctx, ConstraintsActivity::class.java)) },
+                showDivider = true,
+            )
+            EntryRow(
+                "API 与集成",
+                "网关 / API key / 模型 / 语音 / Notion 一次配好",
+                onClick = { ctx.startActivity(Intent(ctx, UnifiedSettingsActivity::class.java)) },
+            )
         }
 
         SectionHeader("权限")

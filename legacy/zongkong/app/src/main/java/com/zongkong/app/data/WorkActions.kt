@@ -2,6 +2,7 @@ package com.zongkong.app.data
 
 import android.content.Context
 import android.util.Log
+import com.changliu.infra.fusion.FusionHooks
 import com.zongkong.app.system.Reminders
 import com.zongkong.core.ApiResult
 import com.zongkong.core.DayOps
@@ -218,6 +219,7 @@ class WorkActions(private val context: Context, private val store: Store, privat
         store.touch()
         store.updateWork { WorkOps.complete(it, actionKey, result, met, next, now(), zone, rnd) }
         if (met == WorkOps.Met.YES) PlanActions(store, this).onActionDone(actionKey)
+        FusionHooks.ledgerEmit?.invoke("zk", "task_done", "", actionKey, 1L, result)
         kick()
     }
 

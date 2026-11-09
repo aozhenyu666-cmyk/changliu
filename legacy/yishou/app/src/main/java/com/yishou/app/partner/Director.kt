@@ -1,7 +1,7 @@
 package com.yishou.app.partner
 
 import com.yishou.app.llm.Faces
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmResult
 import com.yishou.app.llm.Tagged
 
 data class Turn(val who: String, val text: String)

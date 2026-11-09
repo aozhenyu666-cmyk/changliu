@@ -61,6 +61,9 @@ fun HomeScreen(
         }
 
         Spacer(Modifier.height(16.dp))
+        GateCard(snap)
+
+        Spacer(Modifier.height(16.dp))
         if (snap.locked) LockedHero(snap, onOpenDriver) else IdleHero(snap, onOpenDriver)
 
         SectionHeader("今天")
@@ -102,7 +105,7 @@ fun HomeScreen(
         ChangliuCard {
             EntryRow("开始训练", "题库 / 六骰子 / 题卡 / 语音伙伴", onClick = onGoTrain, showDivider = true)
             EntryRow("去四部", "总控时间 / 严管 / 今日部署", onClick = onGoDept, showDivider = true)
-            EntryRow("找参谋", "把今天交给总控排一遍", onClick = onOpenZkChat)
+            EntryRow("找中枢", "能读三端数据、调工具、改约束", onClick = onOpenZkChat)
         }
 
         if (snap.lastLine.isNotBlank()) {
@@ -118,6 +121,44 @@ fun HomeScreen(
                 )
             }
         }
+    }
+}
+
+/**
+ * 防线卡片：信用分 → 关卡 → 放行分钟，一条链上的三个数摆在一起。
+ * 用户能看见"我现在的信用换到的是哪一关"，收紧才不像是系统随机发火。
+ */
+@Composable
+private fun GateCard(snap: ShellSnap) {
+    val tight = snap.gateLevel >= 3
+    ChangliuCard(tone = if (tight) Tone.Seal else Tone.Neutral) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Kicker("防线 · L${snap.gateLevel}", if (tight) Tone.Seal else Tone.Accent)
+                Text(
+                    snap.gateLabel,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            BigFigure("${snap.credit}")
+            Spacer(Modifier.width(6.dp))
+            Text("信用", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Text(
+            if (snap.gateMinutes > 0) "过闸放行 ${snap.gateMinutes} 分钟 · ${snap.gateReason}" else snap.gateReason.ifBlank { "现在不给放行" },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            if (snap.veinFed + snap.veinPending > 0) {
+                "四部 → 一手：已装弹药 ${snap.veinFed} 条，待炼 ${snap.veinPending} 条；问你的题从这里出。"
+            } else {
+                "四部 → 一手：脉络里还没有待验证的假设，先建一条。"
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

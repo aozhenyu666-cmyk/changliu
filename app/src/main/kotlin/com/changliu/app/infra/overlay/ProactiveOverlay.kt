@@ -122,8 +122,7 @@ object ProactiveOverlay {
     private fun openChat(ctx: Context) {
         runCatching {
             ctx.startActivity(
-                Intent().setClassName(ctx.packageName, "com.zongkong.app.ui.MainActivity")
-                    .putExtra("route", "chat")
+                Intent().setClassName(ctx.packageName, "com.changliu.app.ui.ConductorActivity")
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             )
         }
@@ -136,8 +135,7 @@ object ProactiveOverlay {
             nm.createNotificationChannel(NotificationChannel(CHANNEL, "长流搭话", NotificationManager.IMPORTANCE_DEFAULT))
             val pi = PendingIntent.getActivity(
                 ctx, 0,
-                Intent().setClassName(ctx.packageName, "com.zongkong.app.ui.MainActivity")
-                    .putExtra("route", "chat")
+                Intent().setClassName(ctx.packageName, "com.changliu.app.ui.ConductorActivity")
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )

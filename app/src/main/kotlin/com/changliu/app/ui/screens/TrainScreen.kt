@@ -56,6 +56,37 @@ fun TrainScreen(snap: ShellSnap) {
             ) { Text("进入一手") }
         }
 
+        SectionHeader("现在练一手", "过闸用的就是这几种")
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            TrainTile(
+                kicker = "静心",
+                title = "舒尔特方格",
+                hint = "30 秒聚焦",
+                modifier = Modifier.weight(1f),
+            ) { Openers.yishou(ctx, "schulte") }
+            TrainTile(
+                kicker = "找破绽",
+                title = "残局",
+                hint = "从原文截漏洞",
+                modifier = Modifier.weight(1f),
+            ) { Openers.yishou(ctx, "endgame") }
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            TrainTile(
+                kicker = "先押后验",
+                title = "预判本",
+                hint = "押错了要认",
+                modifier = Modifier.weight(1f),
+            ) { Openers.yishou(ctx, "bets") }
+            TrainTile(
+                kicker = "对着刷",
+                title = "刷屏做题",
+                hint = "边看边答",
+                modifier = Modifier.weight(1f),
+            ) { runCatching { ctx.startActivity(com.yishou.app.scroll.ScrollActivity.startIntent(ctx)) } }
+        }
+
         SectionHeader("入口")
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             TrainTile(

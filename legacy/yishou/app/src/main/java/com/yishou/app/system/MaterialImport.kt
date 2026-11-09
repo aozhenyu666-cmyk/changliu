@@ -5,8 +5,8 @@ import com.yishou.app.YishouApp
 import com.yishou.app.data.Material
 import com.yishou.app.data.MaterialSource
 import com.yishou.app.deed.Goods
-import com.yishou.app.llm.LlmError
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmError
+import com.changliu.infra.llm.LlmResult
 import com.yishou.app.think.MaterialText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

@@ -7,7 +7,7 @@ import com.yishou.app.data.Material
 import com.yishou.app.data.PracticeDao
 import com.yishou.app.data.ThinkDao
 import com.yishou.app.llm.DrillGen
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

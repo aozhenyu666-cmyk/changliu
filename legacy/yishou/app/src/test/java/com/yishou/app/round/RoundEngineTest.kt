@@ -8,8 +8,8 @@ import com.yishou.app.data.RoundSource
 import com.yishou.app.data.Task
 import com.yishou.app.llm.BreakpointUpdate
 import com.yishou.app.llm.Judgement
-import com.yishou.app.llm.LlmError
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmError
+import com.changliu.infra.llm.LlmResult
 import com.yishou.app.llm.OpeningMove
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals

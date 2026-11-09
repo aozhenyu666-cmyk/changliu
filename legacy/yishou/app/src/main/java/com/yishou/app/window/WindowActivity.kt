@@ -81,6 +81,8 @@ class WindowActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         vm.refresh()
+        // 融合：总控让一手直接开局时带 startNow，不必再点一次
+        if (intent?.getBooleanExtra("startNow", false) == true) vm.startNow()
         setContent {
             YishouTheme {
                 val s by vm.state.collectAsStateWithLifecycle()

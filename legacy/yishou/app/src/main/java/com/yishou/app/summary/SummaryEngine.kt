@@ -9,8 +9,8 @@ import com.yishou.app.data.Round
 import com.yishou.app.data.Task
 import com.yishou.app.llm.Coach
 import com.yishou.app.llm.CoachMessages
-import com.yishou.app.llm.LlmError
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmError
+import com.changliu.infra.llm.LlmResult
 import com.yishou.app.settings.AppPrefs
 import com.yishou.app.window.WindowClock
 import java.time.Instant

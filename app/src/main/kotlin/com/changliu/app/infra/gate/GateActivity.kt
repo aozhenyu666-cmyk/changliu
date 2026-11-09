@@ -24,11 +24,27 @@ import com.changliu.app.Store
 import com.changliu.app.Ui
 import com.changliu.app.UsageMonitor
 import com.changliu.app.brain.BrainRuntime
+import com.changliu.app.hub.ledger.Ledger
+import com.changliu.app.hub.policy.CompanionDebt
+import com.changliu.app.hub.policy.QuestionBank
+import com.changliu.app.ui.ChangliuShellActivity
+import com.yishou.app.YishouApp
+import com.yishou.app.data.CardAttempt
+import com.yishou.app.data.CardMode
+import com.yishou.app.scroll.ScrollActivity
+import com.zongkong.app.ZkHost
+import com.zongkong.core.work.F
+import com.zongkong.core.work.Focus
+import kotlinx.coroutines.runBlocking
+import org.json.JSONObject
 import com.changliu.core.Cog
 import com.changliu.core.CogState
 import com.changliu.core.ComposeRequest
 import com.changliu.core.Gate
 import com.changliu.core.Similar
+import com.changliu.core.hub.GateLevel
+import com.changliu.core.hub.GateMode
+import com.changliu.core.hub.GatePlan
 
 /**
  * 长流唯一强制全屏页：无障碍服务拦下 App 后拉起这里。
@@ -47,6 +63,13 @@ class GateActivity : Activity() {
     companion object {
         private const val EXTRA_PKG = "pkg"
         private const val EXTRA_MODE = "mode"
+        private const val EXTRA_LEVEL = "level"
+        private const val EXTRA_ROUNDS = "rounds"
+        private const val EXTRA_MINUTES = "minutes"
+        private const val EXTRA_CREDIT = "credit"
+        private const val EXTRA_COMPANION = "companion"
+        private const val EXTRA_REASON = "reason"
+        private const val STATE_PASSED = "passed"
         private const val STATE_DRAFT = "draft"
         private const val STATE_Q_TEXT = "q_text"
         private const val STATE_Q_ANCHOR = "q_anchor"
@@ -77,6 +100,15 @@ class GateActivity : Activity() {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 .putExtra(EXTRA_PKG, pkg)
                 .putExtra(EXTRA_MODE, mode)
+
+        /** 统一编排器算好的关卡：几轮、几分钟、要不要挂伴读，一页说清。 */
+        fun intent(context: Context, pkg: String, plan: GatePlan): Intent =
+            intent(context, pkg, if (plan.gate == GateMode.HQ) MODE_HQ else if (plan.locked) MODE_BLOCK else MODE_GATE)
+                .putExtra(EXTRA_LEVEL, plan.level.n)
+                .putExtra(EXTRA_ROUNDS, plan.rounds)
+                .putExtra(EXTRA_MINUTES, plan.minutes)
+                .putExtra(EXTRA_COMPANION, plan.companion)
+                .putExtra(EXTRA_REASON, plan.reason)
     }
 
     private val main = Handler(Looper.getMainLooper())
@@ -97,20 +129,35 @@ class GateActivity : Activity() {
     @Volatile private var loadToken = 0
     /** 这一题是什么时候真正显示的：给五态估计算响应延迟。 */
     private var questionAt = 0L
+    /** 这一题来自一手题库哪张卡（答完回写 CardAttempt）。 */
+    private var bankCardId = 0L
+    /** 统一编排器给的关卡（没给就是老的单题门）。 */
+    private var level = 1
+    private var needRounds = 1
+    private var passedRounds = 0
+    private var minutesOverride = 0
+    private var companion = false
+    private var planReason = ""
+
+    private val blockedMode: Boolean get() = mode == MODE_BLOCK || mode == MODE_HQ
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         target = intent.getStringExtra(EXTRA_PKG).orEmpty()
         mode = intent.getStringExtra(EXTRA_MODE) ?: MODE_GATE
+        readPlan(intent)
         if (target.isBlank()) { finish(); return }
         // 已经答完/放弃的门被系统重建时，不要再把旧题显示一遍
         if (savedInstanceState?.getBoolean(STATE_DONE) == true) { finish(); return }
+        passedRounds = savedInstanceState?.getInt(STATE_PASSED, 0) ?: 0
         UsageMonitor.clearBlocked(this)
+        Ledger.emit("driver", "gate_shown", pkg = target, ref = mode)
         visible = true
         lastShownAt = System.currentTimeMillis()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         vibrate()
         render()
+        if (blockedMode) return
         val restored = restore(savedInstanceState)
         if (restored != null) showQuestion(restored.first, restored.second) else loadQuestion()
     }
@@ -160,6 +207,7 @@ class GateActivity : Activity() {
         outState.putString(EXTRA_PKG, target)
         outState.putString(EXTRA_MODE, mode)
         outState.putBoolean(STATE_DONE, done)
+        outState.putInt(STATE_PASSED, passedRounds)
         outState.putString(STATE_DRAFT, input.text?.toString().orEmpty())
         question?.let { q ->
             outState.putString(STATE_Q_TEXT, q.text)
@@ -168,6 +216,16 @@ class GateActivity : Activity() {
             outState.putString(STATE_Q_AGENDA, q.agendaId)
             outState.putString(STATE_Q_SOURCE, q.source)
         }
+    }
+
+    /** 编排器给的关卡信息；老调用方没有这些 extra，就退化成"答一道就放行"。 */
+    private fun readPlan(intent: Intent?) {
+        if (intent == null) return
+        level = intent.getIntExtra(EXTRA_LEVEL, 1).coerceIn(1, 4)
+        needRounds = intent.getIntExtra(EXTRA_ROUNDS, 1).coerceIn(1, 5)
+        minutesOverride = intent.getIntExtra(EXTRA_MINUTES, 0).coerceAtLeast(0)
+        companion = intent.getBooleanExtra(EXTRA_COMPANION, false)
+        planReason = intent.getStringExtra(EXTRA_REASON).orEmpty()
     }
 
     private fun restore(state: Bundle?): Pair<Gate.Question, String>? {
@@ -249,6 +307,10 @@ class GateActivity : Activity() {
     }
 
     private fun render() {
+        if (blockedMode) {
+            renderBlocked()
+            return
+        }
         val p = Palette.dark
         ui = Ui(this, p)
         window.statusBarColor = p.bg
@@ -262,7 +324,7 @@ class GateActivity : Activity() {
 
         ui.kicker(if (mode == MODE_GATE) "拦下了 · ${BrainRuntime.moodLabel()}" else "现在不行")
         ui.headline(headline(), 24f)
-        ui.lead("说依据就行：因为什么、题干哪一句、什么规律。")
+        ui.lead(lead())
 
         ui.card(muted = true) {
             ui.kicker("这一问")
@@ -282,6 +344,8 @@ class GateActivity : Activity() {
             it.alpha = 0.45f
         }
         ui.quiet("不打开了") { abandon() }
+        // 证据核验关：说不出来就别硬想，直接进语音陪练把大卡点拆成一步
+        if (level >= 3) ui.quiet("去语音陪练拆一步") { partner() }
 
         setContentView(ScrollView(this).apply { isFillViewport = true; addView(page) })
     }
@@ -290,6 +354,104 @@ class GateActivity : Activity() {
         MODE_BLOCK -> "严管中，先回桌面"
         MODE_HQ -> "总控时间里，不开放"
         else -> "要打开${label(target)}，先答一道题"
+    }
+
+    /** 关卡不同，要求不同：这一行是唯一告诉用户"现在到哪一档"的地方。 */
+    private fun lead(): String {
+        val levelLabel = GateLevel.entries.firstOrNull { it.n == level }?.label
+        val base = when (level) {
+            2 -> "这一关要连过 $needRounds 轮，答对才有 ${minutesForPass()} 分钟。"
+            3 -> "先说明你现在手上的进展和依据；说不出来就去语音陪练拆一步。"
+            else -> "说依据就行：因为什么、题干哪一句、什么规律。"
+        }
+        return if (levelLabel == null) base else "$base（$levelLabel）"
+    }
+
+    private fun minutesForPass(): Int {
+        val setting = Intercept.minutes(this)
+        return if (minutesOverride > 0) minOf(minutesOverride, setting) else setting
+    }
+
+    private fun renderBlocked() {
+        val p = Palette.dark
+        ui = Ui(this, p)
+        window.statusBarColor = p.bg
+        val page = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(ui.px(22), ui.px(88), ui.px(22), ui.px(28))
+            setBackgroundColor(p.bg)
+        }
+        ui.reset(page)
+        ui.kicker(if (mode == MODE_HQ) "总控时间" else "直接拦")
+        ui.headline(if (mode == MODE_HQ) "现在不开放" else "这个 App 现在被统一拦住", 24f)
+        ui.lead(
+            if (planReason.isNotBlank()) planReason
+            else if (mode == MODE_HQ) "总控时间进行中：回总控，把这一段做完。"
+            else "统一约束里这个 App 设为「直接拦」。需要改规则，去「我的 → 约束」。",
+        )
+        ui.card(muted = true) {
+            ui.kicker("当前")
+            ui.text(label(target), 17f, p.text, top = 2f, bottom = 0f)
+        }
+        ui.spacer(14f)
+        ui.primary("回桌面") { finish() }
+        ui.quiet("去长流") {
+            runCatching { startActivity(Intent(this, ChangliuShellActivity::class.java)) }
+            finish()
+        }
+        setContentView(ScrollView(this).apply { isFillViewport = true; addView(page) })
+    }
+
+    /** 今日主线断点：总控当前行动/事项的断点优先。 */
+    private fun mainlineQuestion(): String? = runCatching {
+        val zk = applicationContext as? ZkHost ?: return null
+        val now = System.currentTimeMillis()
+        val cur = Focus.current(zk.store.work.value, now, zk.store.zone, zk.store.mainKey(now))
+        cur.action?.get(F.BREAK)?.takeIf { it.isNotBlank() }
+            ?: cur.thread?.get(F.NEXT)?.takeIf { it.isNotBlank() }
+    }.getOrNull()
+
+    /** 素材池里最近的一段：拿它问论点。 */
+    private fun materialQuestion(): String? = runCatching {
+        val y = applicationContext as? YishouApp ?: return null
+        if (!y.ready) return null
+        val m = runBlocking { y.database.think().recentMaterials(20) }.randomOrNull() ?: return null
+        "「${m.title.take(20)}」这段材料的论点是什么？用一句话说，并指一句原文。"
+    }.getOrNull()
+
+    /** 拦截时答的题库题也算进训练：回写 CardAttempt。 */
+    private fun writeBankAttempt(pass: Boolean, durationMs: Long) {
+        val cardId = bankCardId
+        if (cardId <= 0) return
+        val y = applicationContext as? YishouApp ?: return
+        Engine.background {
+            runCatching {
+                runBlocking {
+                    y.database.cards().insertAttempt(
+                        CardAttempt(
+                            cardId = cardId,
+                            skill = "",
+                            difficulty = 0,
+                            mode = CardMode.GATE,
+                            level = 1,
+                            bet = 0,
+                            conf = "中",
+                            evidenceOk = pass,
+                            checks = 0,
+                            checksOk = 0,
+                            final = if (pass) 1 else 0,
+                            firstCorrect = pass,
+                            finalCorrect = pass,
+                            help = 0,
+                            cause = "",
+                            durationMs = durationMs.coerceAtLeast(0),
+                            verified = false,
+                            createdAt = System.currentTimeMillis(),
+                        ),
+                    )
+                }
+            }
+        }
     }
 
     private fun loadQuestion() {
@@ -302,7 +464,18 @@ class GateActivity : Activity() {
             val recent = store.recentGateQuestions()
             val fallback = Gate.pick(agenda, last?.conclusion, last?.task, profile, seed = recent.size)
             var q = fallback
-            Brains.best(store)?.let { brain ->
+            bankCardId = 0L
+            val mainline = mainlineQuestion()
+            val bank = if (mainline == null) runCatching { QuestionBank.pick(this) }.getOrNull() else null
+            val material = if (mainline == null && bank == null) materialQuestion() else null
+            when {
+                mainline != null -> q = Gate.Question(mainline.take(80), null, null, null, "mainline")
+                bank != null -> {
+                    bankCardId = bank.cardId
+                    q = Gate.Question(bank.text.take(80), null, null, null, "bank")
+                }
+                material != null -> q = Gate.Question(material.take(80), null, null, null, "material")
+                else -> Brains.best(store)?.let { brain ->
                 val req = ComposeRequest(
                     intent = "gate", cog = CogState(Cog.ACTIVE_FLOW, "gate"), die = null,
                     topic = last?.topic.orEmpty(), task = last?.task.orEmpty(), minute = 1, minutes = 1,
@@ -315,6 +488,7 @@ class GateActivity : Activity() {
                 if (Gate.acceptsLlm(d) && Similar.maxSimilarity(d!!.text, recent) < 0.6) {
                     q = Gate.Question(d.text.take(80), d.anchor ?: fallback.anchor, d.missing ?: fallback.missing, fallback.agendaId, "llm")
                 }
+            }
             }
             runCatching { store.pushGateQuestion(q.text) }
             main.post {
@@ -333,13 +507,35 @@ class GateActivity : Activity() {
         val v = Gate.judge(answer, q, Engine.store.blocking().minChars)
         gateLog("answer", mapOf("judged" to v.pass, "why" to v.why, "chars" to v.features.chars, "pkg" to target))
         val nowTs = System.currentTimeMillis()
-        BrainRuntime.onAnswer(this, v.pass, if (questionAt > 0) nowTs - questionAt else 0L, nowTs)
+        val delayMs = if (questionAt > 0) nowTs - questionAt else 0L
+        BrainRuntime.onAnswer(this, v.pass, delayMs, nowTs)
+        writeBankAttempt(v.pass, delayMs)
+        Ledger.emit(
+            "driver",
+            "gate_answer",
+            pkg = target,
+            num = if (v.pass) 1L else 0L,
+            payload = JSONObject()
+                .put("ms", if (questionAt > 0) nowTs - questionAt else 0L)
+                .put("why", v.why)
+                .toString(),
+        )
         if (!v.pass) {
             feedback.text = v.why
             persistDraft()
             return
         }
-        val minutes = Intercept.minutes(this)
+        // 连过几轮才放行：这一轮过了还不能开门，换题接着来
+        passedRounds++
+        if (passedRounds < needRounds) {
+            feedback.text = "这轮过了，还差 ${needRounds - passedRounds} 轮。"
+            input.setText("")
+            question = null
+            persistDraft()
+            loadQuestion()
+            return
+        }
+        val minutes = minutesForPass()
         val refusal = Intercept.allow(this, target, minutes)
         if (refusal != null) {
             feedback.text = refusal
@@ -359,7 +555,14 @@ class GateActivity : Activity() {
                 Engine.store.saveAgenda(agenda)
             }
         }
-        gateLog("pass", mapOf("minutes" to minutes, "pkg" to target, "mode" to mode))
+        gateLog("pass", mapOf("minutes" to minutes, "pkg" to target, "mode" to mode, "level" to level))
+        // 只放行不管 = 等于没拦：二级/三级放行顺手挂上刷屏伴读（要不要看屏由系统弹窗决定）
+        // 先立字据再拉页：用户拒了看屏，这笔欠账下次放行扣回来
+        if (companion) CompanionDebt.mark(this)
+        if (companion && runCatching { startActivity(ScrollActivity.startIntent(this, target)) }.isSuccess) {
+            finish()
+            return
+        }
         launchTarget()
         finish()
     }
@@ -367,6 +570,18 @@ class GateActivity : Activity() {
     private fun launchTarget() {
         val i = packageManager.getLaunchIntentForPackage(target) ?: return
         runCatching { startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+
+    /** 一手的陪练窗口：把卡点拆成能迈出去的最小一步，聊完再回来开这个 App。 */
+    private fun partner() {
+        val opened = runCatching {
+            startActivity(
+                Intent(this, com.yishou.app.window.WindowActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    .putExtra("startNow", true),
+            )
+        }.isSuccess
+        if (!opened) feedback.text = "陪练窗口打不开：检查一手的语音权限。"
     }
 
     private fun label(pkg: String): String = runCatching {

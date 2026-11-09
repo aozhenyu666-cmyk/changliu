@@ -9,8 +9,8 @@ import com.yishou.app.data.Task
 import com.yishou.app.llm.Coach
 import com.yishou.app.llm.CoachContext
 import com.yishou.app.llm.Judgement
-import com.yishou.app.llm.LlmError
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmError
+import com.changliu.infra.llm.LlmResult
 import com.yishou.app.llm.ObservedMove
 import com.yishou.app.llm.OpeningMove
 import com.yishou.app.llm.SummaryResult

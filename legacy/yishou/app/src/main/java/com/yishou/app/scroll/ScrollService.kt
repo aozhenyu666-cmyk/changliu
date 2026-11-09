@@ -33,7 +33,7 @@ import com.yishou.app.YishouApp
 import com.yishou.app.data.MaterialSource
 import com.yishou.app.data.ScrollQuizRow
 import com.yishou.app.gate.GateService
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmResult
 import com.yishou.app.log.RunLog
 import com.yishou.app.settings.AppZone
 import kotlinx.coroutines.CoroutineScope

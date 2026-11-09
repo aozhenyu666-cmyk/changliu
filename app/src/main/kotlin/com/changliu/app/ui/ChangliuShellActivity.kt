@@ -37,7 +37,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.changliu.app.ui.screens.DeptScreen
+import com.changliu.app.ui.screens.DataScreen
+import com.changliu.app.ui.screens.PlanningScreen
 import com.changliu.app.ui.screens.HomeScreen
 import com.changliu.app.ui.screens.MeScreen
 import com.changliu.app.ui.screens.TrainScreen
@@ -77,9 +78,16 @@ class ChangliuShellActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+        // Application 初始化完、界面已经起来后再拉前台服务，避免 5 秒 startForeground 超时 ANR
+        runCatching { com.changliu.app.infra.keepalive.KeepAliveService.sync(this) }
+        runCatching { com.changliu.app.WatchdogJob.schedule(this) }
+    }
 }
 
-private val TAB_LABELS = listOf("首页", "训练", "四部", "我的")
+private val TAB_LABELS = listOf("首页", "训练", "规划", "数据", "我的")
 
 @Composable
 private fun ChangliuShell() {
@@ -107,10 +115,10 @@ private fun ChangliuShell() {
                     onOpenDriver = { Openers.driver(ctx) },
                     onGoTrain = { tab = 1 },
                     onGoDept = { tab = 2 },
-                    onOpenZkChat = { Openers.zk(ctx, "chat") },
-                )
+                    onOpenZkChat = { ctx.startActivity(android.content.Intent(ctx, ConductorActivity::class.java)) },                )
                 1 -> TrainScreen(snap)
-                2 -> DeptScreen(snap, onOpenDepts = { Openers.zk(ctx, "depts") })
+                2 -> PlanningScreen()
+                3 -> DataScreen()
                 else -> MeScreen(snap)
             }
         }

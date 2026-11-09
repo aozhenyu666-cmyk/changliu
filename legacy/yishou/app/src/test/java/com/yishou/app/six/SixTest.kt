@@ -206,7 +206,7 @@ class SixFaceSessionTest {
     fun linkUsesRubricAndQuotes() = runTest {
         val gen = FakeDrillGen()
         val s = DrillSession(gen, FakeThinkDao().apply { materials += mat }, FakePracticeDao(), clock = { 1L })
-        gen.keys += com.yishou.app.llm.LlmResult.Ok(DrillKey(Lens.LINK, "多种树降噪"))
+        gen.keys += com.changliu.infra.llm.LlmResult.Ok(DrillKey(Lens.LINK, "多种树降噪"))
         s.start(mat, Lens.LINK)
         gen.rubric = listOf(RawHit(true, "像隔音墙", ""), RawHit(true, "都靠阻挡声波", ""), RawHit(true, "编出来的", ""))
         s.link(listOf("像隔音墙", "都靠阻挡声波传播", "树会落叶，冬天效果差"))

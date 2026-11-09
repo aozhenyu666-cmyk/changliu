@@ -1,5 +1,6 @@
 package com.yishou.app.llm
 
+import com.changliu.infra.llm.*
 import com.yishou.app.soup.QA
 import com.yishou.app.soup.Reply
 import com.yishou.app.soup.SoupJudge

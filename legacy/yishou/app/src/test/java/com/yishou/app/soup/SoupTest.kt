@@ -2,8 +2,8 @@ package com.yishou.app.soup
 
 import com.yishou.app.card.Card
 import com.yishou.app.card.Skill
-import com.yishou.app.llm.LlmError
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmError
+import com.changliu.infra.llm.LlmResult
 import com.yishou.app.llm.SoupPrompts
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals

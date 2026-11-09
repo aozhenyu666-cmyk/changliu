@@ -11,6 +11,7 @@ import android.os.HandlerThread
 import android.os.Looper
 import android.util.Log
 import com.changliu.app.infra.keepalive.KeepAliveService
+import com.changliu.app.hub.ledger.Ledger
 import com.changliu.core.Card
 import com.changliu.core.Directive
 import com.changliu.core.Driver
@@ -78,6 +79,7 @@ object Engine {
         driver = d
         sessionId = id
         val out = d.start(System.currentTimeMillis(), topic, task, minutes, settings.anchors)
+        Ledger.emit("driver", "live_start", ref = topic, num = minutes.toLong(), payload = task)
         main.post { KeepAliveService.startLock(app, task.ifBlank { topic }) }
         handle(out)
         ensureTicker()
@@ -174,6 +176,8 @@ object Engine {
 
     private fun finish(d: Driver, end: Directive) {
         val snap = d.state()
+        val minutes = ((end.at - snap.startedAt) / 60_000L).coerceAtLeast(0L)
+        Ledger.emit("driver", "live_end", ref = end.reason.orEmpty(), num = minutes, payload = end.conclusion.orEmpty())
         runCatching {
             store.saveHistory(d.history)
             d.agenda?.let { store.saveAgenda(it) }

@@ -15,7 +15,7 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import androidx.core.content.ContextCompat
 import com.yishou.app.YishouApp
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmResult
 import com.yishou.app.log.RunLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow

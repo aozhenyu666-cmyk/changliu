@@ -3,6 +3,7 @@ package com.changliu.app
 import android.content.Context
 import com.yishou.app.YishouApp
 import com.changliu.app.infra.keepalive.KeepAliveService
+import com.changliu.app.infra.link.FusionLink
 import com.changliu.app.infra.link.YsGateLink
 import com.changliu.app.infra.link.ZkGateLink
 import com.zongkong.app.Shared
@@ -57,6 +58,8 @@ class ChangliuApp : YishouApp(), ZkHost {
     override fun onCreate() {
         // 一手：AppDatabase → SettingsStore → RoundEngine/CardEngine/... → 通知/窗口/提醒
         super.onCreate()
+        // 统一账本先就位：后面各模块的钩子随时可写
+        com.changliu.app.hub.ledger.Ledger.init(this)
 
         // 总控：一律北京时间；崩溃护盾先装，后面的初始化失败也能记下来
         TimeZone.setDefault(TimeZone.getTimeZone("Asia/Shanghai"))
@@ -64,9 +67,12 @@ class ChangliuApp : YishouApp(), ZkHost {
         store = Store(this)
         actions = Actions(this, store)
         chat = ChatRepo(this, store, actions)
-        runCatching { ZkNotifications.ensureChannels(this) }
-        runCatching { ZkReminders.reschedule(this) }
-        runCatching { ZkReminders.watchdog(this) }
+        // 通知/提醒的接线放到后台，别和首次启动抢主线程
+        appScope.launch {
+            runCatching { ZkNotifications.ensureChannels(this@ChangliuApp) }
+            runCatching { ZkReminders.reschedule(this@ChangliuApp) }
+            runCatching { ZkReminders.watchdog(this@ChangliuApp) }
+        }
 
         // 驾驶员：状态机 / 存储 / 察觉
         Engine.init(this)
@@ -74,6 +80,7 @@ class ChangliuApp : YishouApp(), ZkHost {
         // 三条拦截决策链挂到唯一无障碍服务上（总控优先，其次一手，最后驾驶员兜底）
         ZkGateLink.install()
         YsGateLink.install()
+        FusionLink.install(this)
 
         // 总控界面/权限页改看唯一服务的真实连接状态
         com.zongkong.app.ui.PermissionStatus.fusionA11y = { ctx ->
@@ -88,9 +95,8 @@ class ChangliuApp : YishouApp(), ZkHost {
         // 总控旧健康协议会在融合后误报「无障碍被关」；启动时清掉那条旧提醒
         runCatching { com.zongkong.app.system.Notifications.cancelHq(this) }
 
-        // 冷启动就把守护/看门狗挂上：首页一打开就能看到"守护中"，不用等用户进出业务页
-        runCatching { KeepAliveService.sync(this) }
-        runCatching { WatchdogJob.schedule(this) }
+        // 常驻服务不在这里启动：Application.onCreate 可能已经很久，前台服务 5 秒内没
+        // startForeground 会直接 ANR。由壳页 onResume 再拉（见 ChangliuShellActivity）。
         appScope.launch { runCatching { A11yGuard.ensure(this@ChangliuApp) } }
     }
 }

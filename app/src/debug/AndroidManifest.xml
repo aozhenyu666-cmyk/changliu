@@ -7,16 +7,11 @@
     <application>
         <activity
             android:name=".UiPreviewActivity"
-            android:exported="true"
+            android:exported="false"
             android:theme="@style/Theme.Driver.Card" />
 
-        <!-- 调试入口：adb shell am start -n com.changliu.app/.ui.MemoryActivity -->
-        <activity
-            android:name=".ui.MemoryActivity"
-            android:exported="true"
-            tools:replace="android:exported" />
-
-        <!-- 调试入口：adb shell am broadcast -a com.changliu.app.DEBUG_NUDGE -->
+        <!-- 唯一的调试口子：adb shell am broadcast -a com.changliu.app.DEBUG_NUDGE
+             用来在真机上验 L0 小卡 / L1 语音，不进 release。 -->
         <receiver
             android:name=".DebugNudgeReceiver"
             android:exported="true">

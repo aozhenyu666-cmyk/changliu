@@ -1,4 +1,4 @@
-package com.changliu.app.infra.llm
+package com.changliu.infra.llm
 
 import org.json.JSONException
 import org.json.JSONObject

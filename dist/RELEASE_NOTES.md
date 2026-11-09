@@ -1,10 +1,15 @@
-# 长流 0.7.0-fusion（调试版）
+# 长流 0.8.4-hub-P3P4（调试版）
 
-单进程融合包：驾驶员 + 一手 + 总控，包名 `com.changliu.app`。
+补齐 17 个中枢工具与 P2 尾巴：题库回写、主线/素材出题。
 
 ## 下载
-- `changliu-0.7.0-fusion-debug.apk`：直接安装。
-- `changliu-0.7.0-fusion.zip`：APK + 安装说明（推荐）。
+- `changliu-0.8.4-hub-P3P4-debug.apk`：直接安装。
+- `changliu-0.8.4-hub-P3P4.zip`：APK + 安装说明 + 交接文档（推荐）。
+
+## 0.8.4 新增
+- **中枢 17 工具**：新增 assign_drill（排训练）、add_material（收素材）、add_action（加行动）、live_summary、agenda_breakpoints。
+- **出题路由补齐**：主线断点 → 一手题库 → 素材 → 模型 → 模板。
+- **CardAttempt 回写**：拦截时答的题库题写入一手训练记录。
 
 ## 安装
 1. Android 8.0 及以上，允许「安装未知应用」。

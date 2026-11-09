@@ -204,6 +204,13 @@ object BrainRuntime {
                     .put("to", state.name)
                     .put("why", estimate.reasons.joinToString("；")),
             )
+            com.changliu.app.hub.ledger.Ledger.emit(
+                "brain",
+                "flow_transition",
+                ref = state.name,
+                num = 1L,
+                payload = estimate.reasons.joinToString("；"),
+            )
             mood = moodEngine.pick(now, credit(ctx), state, BrainTuning.extra(ctx)).mood
         } else if (moodEngine.current(now) == null) {
             mood = moodEngine.pick(now, credit(ctx), state, BrainTuning.extra(ctx)).mood

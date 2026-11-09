@@ -1,5 +1,6 @@
 package com.yishou.app.gate
 
+import com.changliu.infra.fusion.FusionHooks
 import com.yishou.app.card.SessionState
 import com.yishou.app.card.Step
 import com.yishou.app.data.AppDao
@@ -48,9 +49,13 @@ class PassIssuer(
         return save(group, minOf(minutesFor(group), GatePlan.LOW_PASS_MIN))
     }
 
-    private suspend fun save(group: String, minutes: Int): Pass {
+    private suspend fun save(group: String, minutes: Int): Pass? {
+        // 融合：总控严管/专注锁/落后时收紧；hold 时这一轮不发放行。
+        val policy = FusionHooks.zongkongPassPolicy?.invoke()
+        if (policy?.hold == true) return null
+        val capped = policy?.passCap?.takeIf { it > 0 }?.let { minOf(minutes, it) } ?: minutes
         val now = clock()
-        val pass = Pass(packageGroup = group, startAt = now, endAt = now + minutes.coerceAtLeast(1) * 60_000L, roundId = VERIFIED_GATE_PASS_MARKER)
+        val pass = Pass(packageGroup = group, startAt = now, endAt = now + capped.coerceAtLeast(1) * 60_000L, roundId = VERIFIED_GATE_PASS_MARKER)
         return pass.copy(id = dao.insertPass(pass))
     }
 

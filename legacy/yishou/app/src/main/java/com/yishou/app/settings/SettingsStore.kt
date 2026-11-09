@@ -5,7 +5,7 @@ import android.content.SharedPreferences
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
-import com.yishou.app.llm.LlmConfig
+import com.changliu.infra.llm.LlmConfig
 import com.yishou.app.speech.SpeechConfig
 import com.yishou.app.speech.SpeechEndpoint
 import com.yishou.app.speech.SpeechSettings

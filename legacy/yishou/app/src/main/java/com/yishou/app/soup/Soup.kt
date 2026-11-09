@@ -1,7 +1,7 @@
 package com.yishou.app.soup
 
 import com.yishou.app.card.Card
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmResult
 import com.yishou.app.think.Words
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

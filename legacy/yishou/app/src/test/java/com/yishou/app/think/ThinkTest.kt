@@ -13,8 +13,8 @@ import com.yishou.app.deed.Dim
 import com.yishou.app.deed.Goods
 import com.yishou.app.deed.Spec
 import com.yishou.app.llm.DrillGen
-import com.yishou.app.llm.LlmError
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmError
+import com.changliu.infra.llm.LlmResult
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest

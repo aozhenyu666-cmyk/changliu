@@ -33,4 +33,6 @@ if (androidSdkPresent()) {
     // 保留原包名/R/BuildConfig，最终由 :app 打进同一个 APK。
     include(":ys")
     include(":zk")
+    // 三端共用的对外能力（LLM 等）。ys/zk 也是 library 且被 app 依赖，统一实现只能放这一层。
+    include(":infra")
 }

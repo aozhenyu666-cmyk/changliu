@@ -1,5 +1,6 @@
 package com.yishou.app.llm
 
+import com.changliu.infra.llm.*
 import com.yishou.app.endgame.Endgames
 
 /** 把一段原文加工成残局。只加工，不现编：结果在本机核对过（残局必须是原文，破绽必须在残局里）才收。 */

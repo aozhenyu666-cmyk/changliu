@@ -96,7 +96,7 @@ class ChatRepo(private val context: Context, private val store: Store, private v
 
     private var job: Job? = null
 
-    val client = ChatClient({ store.config.value.ai })
+    val client by lazy { ChatClient({ store.config.value.ai }) }
 
     private val env = object : AgentEnv {
         override val zone: ZoneId get() = store.zone

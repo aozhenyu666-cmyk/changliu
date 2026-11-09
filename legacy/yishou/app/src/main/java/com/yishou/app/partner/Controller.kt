@@ -1,6 +1,6 @@
 package com.yishou.app.partner
 
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmResult
 import com.yishou.app.think.Words
 import com.yishou.app.voice.SentenceSplitter
 import com.yishou.app.voice.StreamingTextModel

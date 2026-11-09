@@ -32,7 +32,7 @@ import androidx.lifecycle.lifecycleScope
 import com.yishou.app.MainActivity
 import com.yishou.app.YishouApp
 import com.yishou.app.data.MaterialSource
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmResult
 import com.yishou.app.ui.VortexLoader
 import com.yishou.app.ui.theme.YishouTheme
 import kotlinx.coroutines.launch

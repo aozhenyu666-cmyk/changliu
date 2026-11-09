@@ -1,10 +1,10 @@
 package com.yishou.app.partner
 
-import com.yishou.app.llm.ChatClient
+import com.changliu.infra.llm.ChatClient
 import com.yishou.app.llm.DirectorPrompts
-import com.yishou.app.llm.LlmConfig
+import com.changliu.infra.llm.LlmConfig
 import com.yishou.app.llm.LlmDirector
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async

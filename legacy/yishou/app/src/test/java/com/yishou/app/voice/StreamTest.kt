@@ -1,9 +1,9 @@
 package com.yishou.app.voice
 
-import com.yishou.app.llm.ChatClient
-import com.yishou.app.llm.LlmConfig
-import com.yishou.app.llm.LlmResult
-import com.yishou.app.llm.SseParser
+import com.changliu.infra.llm.ChatClient
+import com.changliu.infra.llm.LlmConfig
+import com.changliu.infra.llm.LlmResult
+import com.changliu.infra.llm.SseParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch

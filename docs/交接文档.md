@@ -14,7 +14,9 @@
 - 单 Application、单无障碍服务、单强制全屏页、单常驻服务、单 LLM 客户端；
 - 三套 UI 在同一个 App 内可用（统一壳四栏 + 各自完整页面）；
 - 长流引擎 P1（五态、mood、主动搭话、记忆消化、周复盘权重）已接入；
-- 767 项单元测试全绿，模拟器完成启动/拦截/主动搭话/记忆消化/5 分钟静置验证；
+- 三端设置统一（API key / 模型 / 语音 / Notion），并完成进程内直连（总控读一手、交任务、开窗口；一手放行受总控收紧）；
+- 统一约束与题库出题（P2）：三份名单并集、四种模式、最严者胜、拦截页 blocked 模式；
+- 778 项单元测试全绿，模拟器完成启动/拦截/主动搭话/记忆消化/统一设置/直连/约束导入与直接拦验证；
 - **唯一未完成项：国产 ROM 真机 72h 验收**。
 
 ---
@@ -25,28 +27,30 @@
 
 | 文件 | 位置 | 说明 |
 |---|---|---|
-| APK | `D:\code\changliu\app\build\outputs\apk\debug\app-debug.apk` | 构建产物（19,409,913 字节） |
-| APK 副本 | `D:\code\changliu\dist\changliu-0.7.0-fusion-debug.apk` | 同上 |
-| 压缩包 | `D:\code\changliu\dist\changliu-0.7.0-fusion.zip` | APK + 安装说明 + Release notes + HANDOVER |
-| 桌面副本 | `C:\Users\敖震宇\Desktop\changliu-0.7.0-fusion.zip` | 方便直接取 |
+| APK | `D:\code\changliu\app\build\outputs\apk\debug\app-debug.apk` | 构建产物（17,674,740 字节，0.8.4） |
+| APK 副本 | `D:\code\changliu\dist\changliu-0.8.4-hub-P3P4-debug.apk` | 同上 |
+| 压缩包 | `D:\code\changliu\dist\changliu-0.8.4-hub-P3P4.zip` | APK + 安装说明 + Release notes + HANDOVER |
+| 桌面副本 | `C:\Users\敖震宇\Desktop\changliu-0.8.4-hub-P3P4.zip` | 方便直接取 |
 
 SHA256：
 
 ```
-apk  920489F81355607B4E77AEBE3731ED6F96A52D93EFE455689BC46854AACC6052
+apk  0218198CD495B348B07862FA0B7551E2C428A58EC2EC242A7B0C0F8899D6768F
 ```
 
 zip 每次重打包都会变，校验以 Release asset digest 为准（`gh release view --json assets` 可查）。
 
 ### 2.2 GitHub Release（公开仓库）
 
-- 发布页：https://github.com/aozhenyu666-cmyk/test/releases/tag/changliu-0.7.0-fusion
+- 发布页：https://github.com/aozhenyu666-cmyk/test/releases/tag/changliu-0.8.4-hub-P3P4
 - 压缩包直链：
-  https://github.com/aozhenyu666-cmyk/test/releases/download/changliu-0.7.0-fusion/changliu-0.7.0-fusion.zip
+  https://github.com/aozhenyu666-cmyk/test/releases/download/changliu-0.8.4-hub-P3P4/changliu-0.8.4-hub-P3P4.zip
 - APK 直链：
-  https://github.com/aozhenyu666-cmyk/test/releases/download/changliu-0.7.0-fusion/changliu-0.7.0-fusion-debug.apk
+  https://github.com/aozhenyu666-cmyk/test/releases/download/changliu-0.8.4-hub-P3P4/changliu-0.8.4-hub-P3P4-debug.apk
 - 交接文档直链：
-  https://github.com/aozhenyu666-cmyk/test/releases/download/changliu-0.7.0-fusion/HANDOVER.md
+  https://github.com/aozhenyu666-cmyk/test/releases/download/changliu-0.8.4-hub-P3P4/HANDOVER.md
+
+（0.7.0 / 0.8.0 / 0.8.1 / 0.8.2 的 Release 仍保留，可回退。）
 
 上传后已用本地 SHA256 与 Release asset digest 对照，一致。
 （注：本次执行环境的 curl 直连 GitHub 下载被网络重置/超时，属于环境网络限制；浏览器/手机访问正常。）
@@ -125,14 +129,14 @@ GRADLE_USER_HOME=C:/gh TEMP=C:/dsh-tmp TMP=C:/dsh-tmp \
   ./gradlew :core:test :ys:testDebugUnitTest :zk:testDebugUnitTest :app:assembleDebug --console=plain
 ```
 
-预期：**BUILD SUCCESSFUL**，767 项测试 0 失败。
+预期：**BUILD SUCCESSFUL**，773 项测试 0 失败。
 
 分模块：
 
 ```bash
 ./gradlew :core:test                # 驾驶员 + 长流引擎纯逻辑，63 项
 ./gradlew :ys:testDebugUnitTest     # 一手，405 项（含 Room 迁移）
-./gradlew :zk:testDebugUnitTest     # 总控，299 项（含 core.EngineTest）
+./gradlew :zk:testDebugUnitTest     # 总控，305 项（含 core.EngineTest）
 ./gradlew :app:assembleDebug        # 出 APK
 ```
 
@@ -221,11 +225,11 @@ adb shell am start -n com.changliu.app/.ui.MemoryActivity
 
 ### 5.5 统一 LLM 客户端
 
-`app/.../infra/llm/ChatClient.kt`（一手实现 + `maxTokens/temperature` 扩展）
+`infra/src/main/kotlin/com/changliu/infra/llm/ChatClient.kt`（一手实现 + `maxTokens/temperature` 扩展，三端共用）
 
 - `GatewayBrain` 已改走它；
 - 网关地址归一化：驾驶员默认 `https://ai.kdysite.cloud` → 自动补 `/v1`；
-- key 只在内存明文，落盘走 `SecretBox`（AndroidKeyStore AES/GCM）。
+- key 只在内存明文，落盘走 `:infra` 的 `SecretBox`（AndroidKeyStore AES/GCM）；总控 `config.json` 里的 AI key / Notion token / 语音 key 同样封存。
 
 ### 5.6 长流引擎 P1
 
@@ -261,7 +265,36 @@ SharedPreferences brain_voice    L1 开关
 - `ShellData.kt`：1.5 秒轮询聚合三套状态；
 - `screens/HomeScreen.kt`、`TrainScreen.kt`、`DeptScreen.kt`、`MeScreen.kt`；
 - `MemoryActivity.kt`：记忆查看/删除/暂停、复盘建议采用/恢复；
+- `UnifiedSettingsActivity.kt`：统一 API key / 模型 / 语音 / Notion；
 - `Openers.kt`：深链进入一手/总控/驾驶员页面（`route` extra）。
+
+### 5.8 功能整合与联通
+
+**统一设置**：`app/.../infra/settings/UnifiedSettings.kt` 读三端、写三端。
+- 读取优先级：驾驶员（已填 key）→ 一手 → 总控；主模型/轻模型/识图/语音/Notion 各取第一个非空。
+- 落盘：驾驶员 SecretBox 密文、一手 EncryptedSharedPreferences、总控 `sealSecrets` 密文。
+- UI 入口「我的 → 集成 → API 与集成」，带保存并同步、测试连接。
+- 空 key 保存 = 清除（驾驶员会删旧密文）。
+
+**进程内直连**：`:infra` 的 `FusionHooks` + `:app` 的 `FusionLink`。
+- 总控 → 一手：`YishouClient` 优先走 hook，直接读 `DayLedger`、写当前任务、拉起 `WindowActivity(startNow)`；ContentProvider 仅作 fallback。
+- 一手 → 总控：`PassIssuer` 读 `FusionHooks.zongkongPassPolicy`，严管/专注锁/落后时 `hold` 或压到 `passCap` 分钟。
+
+**冷启动**：`YishouApp` 的 engine/cardEngine/drillGen/vision/summaryEngine/materials、总控 `Actions.llm/notion/verifier`、`ChatRepo.client` 全部 lazy；常驻服务移到壳页 `onResume`，避免 `startForeground` 5 秒超时 ANR。
+
+**统一账本 / 数据页（P1）**：
+- `hub/ledger`：Room `changliu.db`，`event` + `rollup` 两表；`Ledger.emit` 异步、保留 180 天、可导出/清空。
+- 钩子：驾驶员服务 `app_fg`、Gate `gate_shown/gate_answer`、Engine `live_start/live_end`、BrainRuntime `flow_transition`；一手 `CardSession.writeSet` → `train_set`；总控 `WorkActions.complete` → `task_done`（经 `FusionHooks.ledgerEmit`）。
+- `hub/stats/HubStats`：今天/本周指标；`KeepAliveService` 每 10 分钟 `rollup`。
+- 统一壳新增「数据」栏（今天 / 本周），五栏为 首页/训练/四部/数据/我的。
+- 总控 Notion 同步回到唯一常驻服务（15 分钟一次）；一手 `WindowClock/WindowRules` 并入 `YsGateLink`（ALLOW / SHORT 定时拉回 / BLOCK 弹页）。
+
+**统一约束 / 题库出题（P2）**：
+- `hub/policy/ConstraintStore`：三份名单并集 → `filesDir/hub/constraints.json`；四模式；同步回三端。
+- `core/hub/PolicyEngine`：BLOCK > GATE > OBSERVE > ALLOW；总控严管/总控时间升级为 BLOCK/HQ。
+- `HubPolicy` 在旧三边链之前接管命中 Profile 的 App；统一 GateActivity 增加 blocked 渲染（直接拦/总控时间，无输入与放行）。
+- `QuestionBank` 优先从一手题库取题；`core/hub/QuestionRouter` 定下五级顺序。
+- P3/P4 地基：`ToolPolicy`（T0–T3/T3 确认/硬边界）与 `WakeRules`（每日 12 次/30 分钟冷却/夜间不开口）已带单测。
 
 ---
 
@@ -271,21 +304,28 @@ SharedPreferences brain_voice    L1 开关
 
 | 文件 | 改动 |
 |---|---|
-| `yishou/.../YishouApp.kt` | `class` → `open class`（供 `ChangliuApp` 继承） |
+| `yishou/.../YishouApp.kt` | `class` → `open class`（供 `ChangliuApp` 继承）；重客户端改 `lazy`（冷启动） |
 | `zongkong/.../ZkApp.kt` | 抽出 `ZkHost` 接口；`ZkContext` 包装；`Context.zk` 返回 `ZkContext` |
-| `zongkong/.../data/WorkActions.kt` | 3 处 `as ZkApp` → `as ZkHost` |
-| `zongkong/.../data/Chat.kt` | 2 处 `as ZkApp` → `as ZkHost` |
+| `zongkong/.../data/WorkActions.kt` | 3 处 `as ZkApp` → `as ZkHost`；`complete()` 写账本 `task_done` |
+| `zongkong/.../data/Chat.kt` | 2 处 `as ZkApp` → `as ZkHost`；`client` 改 lazy |
+| `zongkong/.../data/Actions.kt` | `llm/notion/verifier` 改 lazy（OkHttp 不占冷启动） |
+| `zongkong/.../link/YishouClient.kt` | 优先走 `FusionHooks`（状态/交任务/开窗口），ContentProvider 作 fallback |
 | `zongkong/.../link/LinkProvider.kt` | import/cast 改 `ZkHost` |
 | `zongkong/.../ui/NowScreen.kt` | `runShortcut(app: ZkApp)` → `ZkHost` |
 | `zongkong/.../system/SelfHeal.kt` | `KeepAliveService.bridge` 钩子 |
 | `zongkong/.../guard/GuardService.kt` | `markRunning()` 桥 |
 | `yishou/.../gate/GateService.kt` | `markConnected()/markForeground()` 桥 |
+| `yishou/.../gate/PassIssuer.kt` | 发放行前读总控收紧（hold/passCap） |
+| `yishou/.../window/WindowActivity.kt` | 支持 `startNow` 直接开局 |
+| `yishou/.../card/CardSession.kt` | 一组做完写账本 `train_set` |
 
 ### 6.2 仅 legacy 的补丁（`patches/fusion-legacy.patch`）
 
 | 文件 | 改动 |
 |---|---|
 | `zongkong/.../ui/PermissionsScreen.kt` | `PermissionStatus.fusionA11y` 桥；`accessibility/guardRunning/healthStatus/healthText` 认融合服务；`missingCritical` 在融合服务健康时不再报「管不住你」 |
+
+> 该补丁现在包含上面「上游源码改动」的全部内容（联通/冷启动/权限桥），因此体积较大；vendor 脚本复制后会自动应用。刷新上游后如果补丁冲突，以 `legacy/` 当前实现为准重新生成。
 
 ### 6.3 App 侧融合代码
 
@@ -294,8 +334,16 @@ SharedPreferences brain_voice    L1 开关
 - `infra/a11y/*`
 - `infra/gate/*`
 - `infra/keepalive/*`
-- `infra/link/YsGateLink.kt`、`ZkGateLink.kt`
+- `infra/link/YsGateLink.kt`、`ZkGateLink.kt`、`FusionLink.kt`
+- `infra/settings/UnifiedSettings.kt`
 - `infra/overlay/*`
+- `hub/ledger/*`（changliu.db event/rollup + Ledger.emit）
+- `hub/stats/HubStats.kt`
+- `hub/policy/*`（ConstraintStore / HubPolicy / QuestionBank）
+- `core/hub/*`（PolicyEngine / QuestionRouter / ToolPolicy / WakeRules）
+- `ui/ConstraintsActivity.kt`（约束页）
+- `ui/screens/DataScreen.kt`（数据栏）
+- `:infra/fusion/FusionHooks.kt`（三端中性 DTO / 钩子）
 - `brain/*`
 - `ui/*`
 - `A11yGuard.PEERS` 置空（不再替旧 App 写回）
@@ -309,8 +357,8 @@ SharedPreferences brain_voice    L1 开关
 |---|---|
 | `:core:test` | 63 项通过 |
 | `:ys:testDebugUnitTest` | 405 项通过（含 Room `Migration1415Test`/`Migration1516Test`） |
-| `:zk:testDebugUnitTest` | 299 项通过（含 `com.zongkong.core.EngineTest`） |
-| 合计 | **767 项，0 失败** |
+| `:zk:testDebugUnitTest` | 305 项通过（含 `com.zongkong.core.EngineTest`） |
+| 合计 | **773 项，0 失败** |
 | 清洁构建 | `clean` 后用 `legacy/` 全量构建通过 |
 | 三套 UI 同进程 | 首页 → 一手 → 四部 → 总控首页 均正常，pid 不变 |
 | 拦截回路 | 驾驶员 Chrome 名单 → 切桌面 → 唯一 GateActivity 弹出，页眉带 mood |
@@ -320,6 +368,14 @@ SharedPreferences brain_voice    L1 开关
 | 复盘权重 | 建议采用后写 7 天权重；恢复默认后 prefs 清空 |
 | 5 分钟静置 | pid 不变、无障碍保持绑定、常驻服务在跑；账本新增 heartbeat/proactive；无崩溃 |
 | 总控误报修复 | 融合服务连接后总控首页不再显示「管不住你」；旧健康通知启动时清除 |
+| 统一设置 | 保存后驾驶员/总控 baseUrl 与 model 同步；一手加密 prefs 有新条目；三端状态可查 |
+| 总控读一手 | 「行为管理部」直接显示一手「今天 0/0 组 · 有效 0 手」，不再提示「没装一手」 |
+| 总控收紧一手 | 严管时同页显示「一手最多放行 5 分钟」，一手 `PassIssuer` 读同一策略 |
+| 冷启动 | 健康模拟器 1.4 秒完成冷启动；常驻服务不再抢 `startForeground` |
+| 统一账本 | 打开一次 Chrome 后：数据页显示拦截 1 次、屏幕 1 分钟、前 3 个 App、五态滑行 1 次 |
+| 数据页本周 | 7 天娱乐分钟柱状图与合计正常渲染 |
+| 约束导入 | 三份名单并集得到 6 个 App；总控 blocked 标为「直接拦」，其余「答题放行」 |
+| 直接拦模式 | Chrome 改 BLOCK 后打开：统一拦截页只显示原因 + 回桌面/去长流，无输入与放行 |
 | 密钥安全 | 全仓库 `sk-` 扫描为空 |
 
 模拟器截图（`D:\code\`）：
@@ -340,18 +396,19 @@ SharedPreferences brain_voice    L1 开关
 2. **国产 ROM 后台限制**：一键清理、后台弹出权限、自启动、电池优化仍需真机逐项打掉。
 3. **强制停止打不过**：所有拦截器共同弱点；当前靠 A11yGuard + 看门狗 + 常驻缩短恢复时延。
 4. **总控旧健康协议已摘除**：哨兵/healthwire 代码保留但未注册；`SelfHeal` 的重绑路径不再运行。
-5. **一手窗口规则未并入**：`YsGateLink` 目前只接关注名单 + 放行条 + 伴读；`WindowClock/WindowRules` 的短停留/拉回定时器还在原 GateService 里（未注册）。
-6. **总控后台任务未全并入**：截图抽查、Notion 同步、`Pet.attach`、healthwire 注册仍在旧 GuardService（未注册）。
+5. **一手窗口规则**：`WindowClock/WindowRules` 已并入 `YsGateLink`（ALLOW / SHORT 定时拉回 / BLOCK 弹页）；原 1 秒 watch 循环由 5 秒事件复查 + 20 秒 tick 承担，极短停留的精度略低。
+6. **总控后台任务**：Notion 同步已回到唯一常驻服务；截图抽查、`Pet.attach`、healthwire 注册仍在旧 GuardService（未注册）。
 7. **L1 语音依赖系统 TTS**：无 TTS 引擎时只出 L0 卡。
 8. **主动引擎边界**：只调语气权重，不改红线/宪章/账本；记忆删除不可恢复（只保证不回流）。
-9. **72h 真机验收未做**：模拟器只能做短时静置，不能替代。
+9. **P3/P4 仍是 MVP**：17 个工具已接，但 T3 只覆盖「放宽约束/调高放行」，没有通用确认中心；目标树/里程碑仍由总控计划页维护，规划栏是入口不是完整编辑器；唤醒只出 L0 卡、不自动改计划；没有连续 7 天的早晚主动 AI 对话验证。
+10. **72h 真机验收未做**：模拟器只能做短时静置，不能替代。
 
 ---
 
 ## 9. 接手第一小时
 
 1. 打开 `D:\code\changliu`，确认 `local.properties` 的 `sdk.dir`。
-2. 跑一次全量构建与测试（§4.2），确认 767 项全绿。
+2. 跑一次全量构建与测试（§4.2），确认 773 项全绿。
 3. 安装 APK，按 §4.3 开权限，确认首页三枚状态胶囊为「无障碍已开/守护中/…」。
 4. 打开 Chrome 验证拦截页；用 debug 广播验证 L0 卡。
 5. 读 §6（融合改动点）和 §8（已知问题）后再改代码。

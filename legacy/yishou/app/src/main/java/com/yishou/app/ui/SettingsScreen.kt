@@ -43,7 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.yishou.app.llm.LlmConfig
+import com.changliu.infra.llm.LlmConfig
 import com.yishou.app.settings.AppPrefs
 import com.yishou.app.settings.AppZone
 import com.yishou.app.speech.SpeechEndpoint

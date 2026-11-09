@@ -4,7 +4,7 @@ import android.os.SystemClock
 import com.yishou.app.YishouApp
 import com.yishou.app.data.EchoKind
 import com.yishou.app.data.PartnerSession
-import com.yishou.app.llm.ChatClient
+import com.changliu.infra.llm.ChatClient
 import com.yishou.app.llm.LlmDirector
 import com.yishou.app.log.RunLog
 import com.yishou.app.speech.Heard

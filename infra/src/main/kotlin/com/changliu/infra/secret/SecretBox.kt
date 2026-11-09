@@ -1,4 +1,4 @@
-package com.changliu.app
+package com.changliu.infra.secret
 
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
@@ -15,6 +15,9 @@ import javax.crypto.spec.GCMParameterSpec
  * 密钥本身在系统密钥库里（多数机型有硬件 backing），导不出来；盘上只有密文 + IV。
  * 明文 key 只在内存里短暂存在，不写日志、不进会话推进日志、不上报。
  * 取不到时（换机、密钥被清、密文损坏）返回 null，调用方按"没配 key"处理，回落模板。
+ *
+ * alias 用的是驾驶员原有的 `changliu.llm.key`：三端合并后共用同一把系统密钥，
+ * 驾驶员盘上已有的密文照样能打开，不需要迁移。
  */
 object SecretBox {
     private const val KEYSTORE = "AndroidKeyStore"

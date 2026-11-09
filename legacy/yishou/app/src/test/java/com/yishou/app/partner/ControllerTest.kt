@@ -1,7 +1,7 @@
 package com.yishou.app.partner
 
-import com.yishou.app.llm.LlmError
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmError
+import com.changliu.infra.llm.LlmResult
 import com.yishou.app.voice.ApiReply
 import com.yishou.app.voice.RequestTag
 import com.yishou.app.voice.StreamingTextModel

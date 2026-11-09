@@ -53,7 +53,7 @@ import com.yishou.app.data.CardAttempt
 import com.yishou.app.data.DrillRow
 import com.yishou.app.data.Material
 import com.yishou.app.data.MaterialSource
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmResult
 import com.yishou.app.system.ExternalGrace
 import com.yishou.app.think.DrillKey
 import com.yishou.app.think.DrillSession

@@ -380,8 +380,8 @@ class Store(private val context: Context) {
 
     private fun setConfigLocked(c: Config) {
         _config.value = c
-        val text = ZkJson.encodeToString(Config.serializer(), c)
-        io.execute { writeAtomic(File(dir, "config.json"), text) }
+        // 序列化+封存一起放 io 线程：status() 会被 Compose 重组调用，别在主线程碰 KeyStore
+        io.execute { writeAtomic(File(dir, "config.json"), ZkJson.encodeToString(Config.serializer(), c.sealSecrets())) }
     }
 
     /** 修改今天（逻辑日）的记录。 */
@@ -466,7 +466,7 @@ class Store(private val context: Context) {
         val f = File(dir, "config.json")
         if (!f.exists()) return Config()
         return try {
-            com.zongkong.core.Defaults.migrate(ZkJson.decodeFromString(Config.serializer(), f.readText()))
+            com.zongkong.core.Defaults.migrate(ZkJson.decodeFromString(Config.serializer(), f.readText()).openSecrets())
         } catch (e: Exception) {
             Log.e(TAG, "配置文件读不了，备份后用默认配置", e)
             f.copyTo(File(dir, "config.broken.${System.currentTimeMillis()}.json"), overwrite = true)

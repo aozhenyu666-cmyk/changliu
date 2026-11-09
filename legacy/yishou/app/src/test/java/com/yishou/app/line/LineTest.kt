@@ -13,8 +13,8 @@ import com.yishou.app.data.Move
 import com.yishou.app.data.LineVerdict
 import com.yishou.app.llm.CoachReply
 import com.yishou.app.llm.LineCoach
-import com.yishou.app.llm.LlmError
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmError
+import com.changliu.infra.llm.LlmResult
 import com.yishou.app.think.FakeThinkDao
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow

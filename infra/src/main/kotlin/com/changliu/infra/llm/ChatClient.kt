@@ -1,4 +1,4 @@
-package com.changliu.app.infra.llm
+package com.changliu.infra.llm
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -44,7 +44,8 @@ sealed class LlmError(val message: String) {
     class Local(detail: String) : LlmError(detail)
 
     companion object {
-        private fun httpMessage(code: Int, detail: String): String {
+        /** 状态码 → 看得懂的原因。总控的对话通路也复用它，别在别处再抄一份。 */
+        fun httpMessage(code: Int, detail: String): String {
             val hint = when (code) {
                 400 -> "请求被拒绝。如果服务商不支持 JSON 模式，可在设置里关掉"
                 401, 403 -> "密钥不对或已失效"

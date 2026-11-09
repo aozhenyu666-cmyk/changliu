@@ -16,8 +16,8 @@ import com.yishou.app.data.JobStep
 import com.yishou.app.data.Material
 import com.yishou.app.data.StepResult
 import com.yishou.app.job.Jobs
-import com.yishou.app.llm.LlmError
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmError
+import com.changliu.infra.llm.LlmResult
 import com.yishou.app.think.DrillKey
 import com.yishou.app.think.DrillSession
 import com.yishou.app.think.DrillStep

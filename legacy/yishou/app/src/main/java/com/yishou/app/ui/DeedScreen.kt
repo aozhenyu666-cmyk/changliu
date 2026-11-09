@@ -51,7 +51,7 @@ import com.yishou.app.data.DrillRow
 import com.yishou.app.deed.Compare
 import com.yishou.app.deed.Deeds
 import com.yishou.app.deed.Goods
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmResult
 import com.yishou.app.settings.AppZone
 import com.yishou.app.system.ExternalGrace
 import com.yishou.app.think.Check

@@ -11,6 +11,7 @@ import com.changliu.app.A11yGuard
 import com.changliu.app.AwarenessRuntime
 import com.changliu.app.Engine
 import com.changliu.app.brain.BrainRuntime
+import com.changliu.app.hub.ledger.Ledger
 import com.changliu.app.infra.keepalive.KeepAliveService
 import com.changliu.app.Intercept
 import com.changliu.app.ObservationShots
@@ -43,6 +44,9 @@ class ChangliuA11yService : AccessibilityService() {
     private var lastActionAt = 0L
     private var lastBeatAt = 0L
     private var lastCheckedAt = 0L
+    /** 统一账本的前台计时（当前包 + 这一段开始时刻）。 */
+    private var ledgerFgPkg: String? = null
+    private var ledgerFgAt = 0L
 
     private val cover by lazy { GateCover(this) }
 
@@ -55,6 +59,37 @@ class ChangliuA11yService : AccessibilityService() {
             BrainRuntime.tick(this@ChangliuA11yService, now, AwarenessRuntime.screenAvailable())
             heartbeat()
             main.postDelayed(this, TICK_MS)
+        }
+    }
+
+    /**
+     * 放行期的 1 秒巡检：只在你手上正有放行条的时候跑。
+     * 事件流被 ROM 吞掉（或秒切回来）时，靠这一次次轮询把"正在别的 App 里"catch 住。
+     * 没有放行条就完全不读窗口，不耗电。
+     */
+    private val passWatcher = object : Runnable {
+        override fun run() {
+            if (passLive()) pollForeground()
+            main.postDelayed(this, PASS_MS)
+        }
+    }
+
+    private fun passLive(): Boolean {
+        val now = System.currentTimeMillis()
+        return runCatching { Engine.store.blocking().allowedUntil.any { it.value > now } }.getOrDefault(false)
+    }
+
+    private fun pollForeground() {
+        val root = runCatching { rootInActiveWindow }.getOrNull() ?: return
+        val pkg = root.packageName?.toString().orEmpty()
+        @Suppress("DEPRECATION") runCatching { root.recycle() }
+        if (pkg.isBlank() || pkg == packageName || pkg == lastSeenPkg) return
+        lastSeenPkg = pkg
+        lastCheckedAt = SystemClock.uptimeMillis()
+        val handled = runCatching { com.changliu.app.hub.policy.GateDirector.intercept(this, pkg) }.getOrDefault(false)
+        if (!handled) {
+            runCatching { A11yExtensions.onWindow(this, pkg, null) }
+            maybeBlock(pkg)
         }
     }
 
@@ -76,6 +111,8 @@ class ChangliuA11yService : AccessibilityService() {
 
         main.removeCallbacks(ticker)
         main.postDelayed(ticker, TICK_MS)
+        main.removeCallbacks(passWatcher)
+        main.postDelayed(passWatcher, PASS_MS)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -90,6 +127,7 @@ class ChangliuA11yService : AccessibilityService() {
         val active = root?.packageName?.toString()
         @Suppress("DEPRECATION") runCatching { root?.recycle() }
         if (active.isNullOrBlank() || active != pkg) { Engine.onForeground(this, null, null); return }
+        recordLedgerForeground(active)
 
         // 回到我们自己的页 / 别的应用：遮罩立刻收起，不常驻
         if (active == packageName || cover.pkg?.let { it != active } == true) cover.hide()
@@ -108,9 +146,33 @@ class ChangliuA11yService : AccessibilityService() {
         if (active == lastSeenPkg && now - lastCheckedAt < RECHECK_MS) return
         lastSeenPkg = active
         lastCheckedAt = now
-        // 先走总控 → 一手的决策链；任一层自己弹了页就不再让驾驶员兜底
-        val handled = A11yExtensions.onWindow(this, active, event.className?.toString())
+        // 先走统一约束（P2）：命中 Profile 就只弹一页，最严者胜
+        val hubHandled = runCatching { com.changliu.app.hub.policy.GateDirector.intercept(this, active) }.getOrDefault(false)
+        // 再走总控 → 一手 → 驾驶员各自的决策链
+        val handled = hubHandled || A11yExtensions.onWindow(this, active, event.className?.toString())
         if (!handled && active != packageName) maybeBlock(active)
+    }
+
+    /** 切换应用时把上一段的时长写进账本（秒）。 */
+    private fun recordLedgerForeground(pkg: String) {
+        val now = System.currentTimeMillis()
+        val previous = ledgerFgPkg
+        if (previous != null && previous != pkg && ledgerFgAt > 0L) {
+            val seconds = ((now - ledgerFgAt) / 1000).coerceIn(0L, 6 * 3600L)
+            if (seconds > 0) Ledger.emit("driver", "app_fg", pkg = previous, num = seconds)
+        }
+        if (previous != pkg) {
+            ledgerFgPkg = pkg
+            ledgerFgAt = now
+        }
+    }
+
+    private fun flushLedgerForeground() {
+        val previous = ledgerFgPkg ?: return
+        val seconds = ((System.currentTimeMillis() - ledgerFgAt) / 1000).coerceIn(0L, 6 * 3600L)
+        if (seconds > 0) Ledger.emit("driver", "app_fg", pkg = previous, num = seconds)
+        ledgerFgPkg = null
+        ledgerFgAt = 0L
     }
 
     private fun maybeBlock(pkg: String) {
@@ -167,6 +229,7 @@ class ChangliuA11yService : AccessibilityService() {
 
     override fun onDestroy() {
         running = false
+        flushLedgerForeground()
         Engine.watchConnected = false
         ObservationShots.connected(null)
         Engine.onForeground(this, null, null)
@@ -189,5 +252,7 @@ class ChangliuA11yService : AccessibilityService() {
         const val COOLDOWN_MS = 1_000L
         const val RECHECK_MS = 5_000L
         const val TICK_MS = 20_000L
+        /** 放行期巡检间隔：只在有放行条时跑。 */
+        const val PASS_MS = 1_000L
     }
 }

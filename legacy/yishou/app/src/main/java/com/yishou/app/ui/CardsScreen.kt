@@ -42,7 +42,7 @@ import com.yishou.app.card.Progress
 import com.yishou.app.card.SessionState
 import com.yishou.app.card.Step
 import com.yishou.app.data.CardMode
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmResult
 import com.yishou.app.system.ExternalGrace
 import com.yishou.app.system.Haptics
 import kotlinx.coroutines.Dispatchers

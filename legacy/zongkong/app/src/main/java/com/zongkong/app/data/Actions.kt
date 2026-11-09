@@ -29,9 +29,10 @@ import java.time.LocalDate
 
 /** 界面和后台服务共用的操作：交关卡、报到、随手记、紧急放行、同步 Notion。 */
 class Actions(private val context: Context, private val store: Store) {
-    val llm = LlmClient({ store.config.value.ai })
-    val notion = NotionClient({ store.config.value.notion.token }, baseUrl = { store.config.value.notion.baseUrl })
-    private val verifier = Verifier(llm, notion)
+    // OkHttp 初始化很重：放在首次使用时（通常在后台协程/用户操作里），不占冷启动主线程
+    val llm by lazy { LlmClient({ store.config.value.ai }) }
+    val notion by lazy { NotionClient({ store.config.value.notion.token }, baseUrl = { store.config.value.notion.baseUrl }) }
+    private val verifier by lazy { Verifier(llm, notion) }
     private val syncLock = Mutex()
 
     /** 事项、行动、记录的操作和双向同步。 */

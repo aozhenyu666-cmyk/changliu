@@ -1,5 +1,6 @@
 package com.yishou.app.llm
 
+import com.changliu.infra.llm.*
 import com.yishou.app.card.BadCard
 import com.yishou.app.card.Card
 import com.yishou.app.card.Flaws

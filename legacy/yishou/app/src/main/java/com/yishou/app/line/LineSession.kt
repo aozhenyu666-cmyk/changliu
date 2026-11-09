@@ -5,7 +5,7 @@ import com.yishou.app.data.LineDao
 import com.yishou.app.data.Move
 import com.yishou.app.data.LineVerdict
 import com.yishou.app.llm.LineCoach
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmResult
 import com.yishou.app.think.Words
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

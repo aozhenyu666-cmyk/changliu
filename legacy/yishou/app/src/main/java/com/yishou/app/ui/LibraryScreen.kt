@@ -21,7 +21,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yishou.app.YishouApp
 import com.yishou.app.card.Card as QuestionCard
 import com.yishou.app.data.*
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmResult
 import com.yishou.app.system.ExternalGrace
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.*

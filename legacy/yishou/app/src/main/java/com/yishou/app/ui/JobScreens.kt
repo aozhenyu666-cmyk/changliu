@@ -289,11 +289,11 @@ class JobViewModel(app: Application) : AndroidViewModel(app) {
             return@launch
         }
         when (val r = yishou.vision.readReport(data)) {
-            is com.yishou.app.llm.LlmResult.Err -> {
+            is com.changliu.infra.llm.LlmResult.Err -> {
                 _busy.value = "没读出来（${r.error.message}），手填也行。"
                 _report.value = com.yishou.app.outside.Report("", null, null, null)
             }
-            is com.yishou.app.llm.LlmResult.Ok -> {
+            is com.changliu.infra.llm.LlmResult.Ok -> {
                 _busy.value = null
                 _report.value = r.value
             }

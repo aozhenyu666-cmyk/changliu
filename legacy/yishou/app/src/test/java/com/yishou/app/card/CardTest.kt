@@ -9,8 +9,8 @@ import com.yishou.app.data.CardRow
 import com.yishou.app.data.CardSource
 import com.yishou.app.data.SetStatus
 import com.yishou.app.llm.CardGen
-import com.yishou.app.llm.LlmError
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmError
+import com.changliu.infra.llm.LlmResult
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest

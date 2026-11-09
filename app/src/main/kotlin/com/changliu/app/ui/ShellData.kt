@@ -53,6 +53,15 @@ data class ShellSnap(
     // 长流引擎
     val flowLabel: String = "思考在线",
     val moodLabel: String = "温和",
+    // 防线（GateDirector 单管道）
+    val credit: Int = 70,
+    val gateLevel: Int = 1,
+    val gateLabel: String = "断点快答",
+    val gateMinutes: Int = 10,
+    val gateReason: String = "",
+    /** 四部 → 一手的弹药：已经落进素材池的假设数 / 还没落的。 */
+    val veinFed: Int = 0,
+    val veinPending: Int = 0,
 ) {
     val driverLeft: Int get() = (driverQuotaMin - driverUsedMin).coerceAtLeast(0)
     val zkLeft: Int get() = (zkQuotaMin - zkPlayMin).coerceAtLeast(0)
@@ -104,6 +113,17 @@ object ShellData {
         val prefs = app?.let { runCatching { it.settings.app.value }.getOrNull() }
         val dayStats = app?.let { runCatching { it.stats.day(today) }.getOrNull() }
 
+        // 防线：总控定级后的关卡 + 四部喂给一手的弹药量
+        val zk = runCatching { com.changliu.app.hub.policy.GateDirector.zkContext(ctx) }
+            .getOrDefault(com.changliu.app.hub.policy.GateDirector.ZkContext())
+        val zone = runCatching { com.changliu.app.hub.policy.GateDirector.zone(ctx) }.getOrNull()
+        val hypo = runCatching {
+            (ctx.applicationContext as com.zongkong.app.ZkHost).store.vein.value.nodes
+                .filter { it.vStatus == com.zongkong.core.vein.VStatus.HYPO }
+        }.getOrDefault(emptyList())
+        val fed = ctx.getSharedPreferences("hub_sync", Context.MODE_PRIVATE)
+            .getStringSet("vein_seen", emptySet()).orEmpty()
+
         return ShellSnap(
             greeting = greeting,
             dateLabel = dateLabel,
@@ -134,6 +154,13 @@ object ShellData {
             ysGatePass = dayStats?.events?.get("gate_pass") ?: 0,
             flowLabel = com.changliu.app.brain.BrainRuntime.stateLabel(),
             moodLabel = com.changliu.app.brain.BrainRuntime.moodLabel(),
+            credit = zk.credit,
+            gateLevel = zone?.level?.n ?: 4,
+            gateLabel = zone?.level?.label ?: "绝对封锁",
+            gateMinutes = zone?.minutes ?: 0,
+            gateReason = zone?.reason.orEmpty(),
+            veinFed = hypo.count { it.id in fed },
+            veinPending = hypo.count { it.id !in fed },
         )
     }
 }

@@ -606,26 +606,11 @@ class MainActivity : Activity() {
             },
         ) {
             if (pairing == null) {
-                ui.caption("连上之后追问由它结合自己的记忆来写；不连也能用，追问用模板。")
-                ui.text("① 复制安装说明，发给大肥鱼。它会自己装好插件，回你一个配对码。", 13.5f, Palette.light.textSecondary, top = 8f)
-                ui.secondary("复制安装说明") {
-                    getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("安装说明", Install.TEXT))
-                    toast("已复制。打开 DSH Go，粘贴发给大肥鱼。")
-                }
-                ui.spacer(6f)
-                ui.caption("② 把配对码填在这里")
-                val code = ui.field("例：3080:K7PQ-M3XA")
-                ui.primary("配对") {
-                    val text = code.text.toString()
-                    Thread {
-                        val r = DshLink.pair(text, Build.MODEL ?: "phone")
-                        r.onSuccess { store.savePairing(it) }
-                        main.post {
-                            toast(r.fold({ "配对成功" }, { it.message ?: "配对失败" }))
-                            render(force = true)
-                            checkLink()
-                        }
-                    }.start()
+                // 独立闭环：不再引导用户去桌面端装插件、也不收外部配对码。
+                ui.caption("外部配对入口已关闭：这一版只走本机网关或内置模板，不需要任何桌面端。")
+                ui.text("要更好的追问，去「我的 → API 与集成」填一个网关 key；不填就用模板题，拦截和训练照常。", 13.5f, Palette.light.textSecondary, top = 8f)
+                ui.secondary("去配网关") {
+                    runCatching { startActivity(Intent(this, com.changliu.app.ui.UnifiedSettingsActivity::class.java)) }
                 }
                 return@card
             }

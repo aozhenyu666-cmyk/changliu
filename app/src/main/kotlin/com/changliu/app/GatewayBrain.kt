@@ -1,9 +1,9 @@
 package com.changliu.app
 
 import com.changliu.app.brain.BrainRuntime
-import com.changliu.app.infra.llm.ChatClient
-import com.changliu.app.infra.llm.LlmConfig as InfraLlmConfig
-import com.changliu.app.infra.llm.LlmResult
+import com.changliu.infra.llm.ChatClient
+import com.changliu.infra.llm.LlmConfig as InfraLlmConfig
+import com.changliu.infra.llm.LlmResult
 import com.changliu.core.Brain
 import com.changliu.core.Cog
 import com.changliu.core.ComposeRequest

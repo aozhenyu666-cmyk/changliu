@@ -8,8 +8,8 @@ import android.provider.OpenableColumns
 import android.util.Base64
 import com.yishou.app.YishouApp
 import com.yishou.app.bank.DocText
-import com.yishou.app.llm.LlmError
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmError
+import com.changliu.infra.llm.LlmResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream

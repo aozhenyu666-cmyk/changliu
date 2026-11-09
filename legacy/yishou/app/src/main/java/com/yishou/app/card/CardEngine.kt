@@ -5,7 +5,7 @@ import com.yishou.app.data.CardDao
 import com.yishou.app.data.CardRow
 import com.yishou.app.data.CardSource
 import com.yishou.app.llm.CardGen
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmResult
 import com.yishou.app.log.RunLog
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -73,7 +73,7 @@ class CardEngine(
             val card = runCatching { Card.fromJson(row.json) }.getOrNull() ?: continue
             if (com.yishou.app.judge.LockedQuestions.fromCard(row.id, card) != null) return LlmResult.Ok(Dealt(row, card, redo = false))
         }
-        return LlmResult.Err(com.yishou.app.llm.LlmError.Local("没有带答案和【要点】的未做题，请先导入题包。"))
+        return LlmResult.Err(com.changliu.infra.llm.LlmError.Local("没有带答案和【要点】的未做题，请先导入题包。"))
     }
 
     /**
@@ -133,7 +133,7 @@ class CardEngine(
         }
         val last = lastCard
         if (keepUnverified && last != null) return saveUnverified(skill, last)
-        return lastErr ?: LlmResult.Err(com.yishou.app.llm.LlmError.Local("两次出题答案都没核对上"))
+        return lastErr ?: LlmResult.Err(com.changliu.infra.llm.LlmError.Local("两次出题答案都没核对上"))
     }
 
     private suspend fun saveUnverified(skill: Skill, card: Card): LlmResult<CardRow> {

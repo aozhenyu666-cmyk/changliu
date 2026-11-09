@@ -7,7 +7,8 @@ import com.yishou.app.data.CoachDao
 import com.yishou.app.data.Round as RoundRow
 import com.yishou.app.data.SetStatus
 import com.yishou.app.data.TrainSet
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmResult
+import com.changliu.infra.fusion.FusionHooks
 import com.yishou.app.llm.Prompts
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -292,6 +293,7 @@ class CardSession(
                 verified = if (results.all { it.firstCorrect && it.help == 0 }) 1 else 0,
             ),
         )
+        FusionHooks.ledgerEmit?.invoke("ys", "train_set", "", skill.name, results.size.toLong(), "")
     }
 
     suspend fun next() {

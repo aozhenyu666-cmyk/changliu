@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import com.yishou.app.llm.ChatClient
+import com.changliu.infra.llm.ChatClient
 import com.yishou.app.llm.LlmCoach
 import com.yishou.app.llm.LlmCardGen
 import com.yishou.app.card.CardEngine
@@ -123,7 +123,7 @@ open class YishouApp : Application() {
 
     /** 问一次文字模型，失败返回 null。判卷、线程出题、提议待定项都走它（纯逻辑那边只认这个形状） */
     fun asker(kind: String): suspend (String, String) -> String? = { system, user ->
-        (scrollJudge.complete(system, user, kind = kind, json = false) as? com.yishou.app.llm.LlmResult.Ok)?.value
+        (scrollJudge.complete(system, user, kind = kind, json = false) as? com.changliu.infra.llm.LlmResult.Ok)?.value
     }
 
     /** 判卷：只对照锁死的要点，判卷引的原话本机再核对一遍（judge/） */
@@ -157,26 +157,38 @@ open class YishouApp : Application() {
 
     lateinit var settings: SettingsStore
         private set
-    lateinit var engine: RoundEngine
-        private set
-    lateinit var summaryEngine: SummaryEngine
-        private set
-    lateinit var vision: Vision
-        private set
+    /** 以下重对象全部 lazy：冷启动首帧不再同步初始化 OkHttp（模拟器上要十几秒） */
+    private val logError: (String, String) -> Unit = { kind, message -> RunLog.e(kind, message) }
+    private val coach by lazy {
+        LlmCoach(ChatClient(config = { settings.llm.value }, usage = stats, onError = logError))
+    }
+    val engine: RoundEngine by lazy { RoundEngine(database.dao(), coach) }
+    val summaryEngine: SummaryEngine by lazy {
+        SummaryEngine(database.dao(), coach, prefs = { settings.app.value }, ledger = { from, to -> dayLedger.between(from, to) })
+    }
+    val vision: Vision by lazy {
+        Vision(ChatClient(config = { settings.vision.value }, http = ChatClient.defaultHttpClient(60), usage = stats, onError = logError))
+    }
     lateinit var stats: StatsStore
         private set
     lateinit var speechApi: SpeechApi
         private set
     /** 题卡：出题、核对、发牌、记分 */
-    lateinit var cardEngine: CardEngine
-        private set
+    val cardEngine: CardEngine by lazy {
+        CardEngine(
+            database.cards(),
+            LlmCardGen(ChatClient(config = { settings.llm.value }, http = ChatClient.defaultHttpClient(60), usage = stats, onError = logError)),
+        )
+    }
 
     /** 写素材、锁答案、判卷 */
-    lateinit var drillGen: com.yishou.app.llm.DrillGen
-        private set
+    val drillGen: com.yishou.app.llm.DrillGen by lazy {
+        com.yishou.app.llm.LlmDrillGen(
+            ChatClient(config = { settings.llm.value }, http = ChatClient.defaultHttpClient(60), usage = stats, onError = logError),
+        )
+    }
     /** 素材进来的几条路 */
-    lateinit var materials: com.yishou.app.system.MaterialImport
-        private set
+    val materials: com.yishou.app.system.MaterialImport by lazy { com.yishou.app.system.MaterialImport(this) }
 
     /** 新开一次练习（练思维页一个） */
     fun newDrill(): com.yishou.app.think.DrillSession =
@@ -208,7 +220,7 @@ open class YishouApp : Application() {
                 repeat(2) {
                     val fresh = database.think().recentMaterials(30).count { it.source == com.yishou.app.data.MaterialSource.MADE && it.uses == 0 }
                     if (fresh >= 2) return@launch
-                    if (materials.make(null) is com.yishou.app.llm.LlmResult.Err) return@launch
+                    if (materials.make(null) is com.changliu.infra.llm.LlmResult.Err) return@launch
                 }
             } finally {
                 makingMaterial.set(false)
@@ -258,8 +270,8 @@ open class YishouApp : Application() {
                 }.take(3)
                 for (m in todo) {
                     val r = endgameGen.make(m.text)
-                    if (r is com.yishou.app.llm.LlmResult.Err) break
-                    (r as com.yishou.app.llm.LlmResult.Ok).value.forEachIndexed { i, d ->
+                    if (r is com.changliu.infra.llm.LlmResult.Err) break
+                    (r as com.changliu.infra.llm.LlmResult.Ok).value.forEachIndexed { i, d ->
                         dao.insert(com.yishou.app.endgame.Endgames.fromDraft(d, "material:${m.id}#$i", System.currentTimeMillis()))
                     }
                     doneIds += m.id.toString()
@@ -318,21 +330,6 @@ open class YishouApp : Application() {
         v16Defaults()
         AppZone.id = settings.app.value.timeZone
         stats = StatsStore(this)
-        val logError: (String, String) -> Unit = { kind, message -> RunLog.e(kind, message) }
-        val coach = LlmCoach(ChatClient(config = { settings.llm.value }, usage = stats, onError = logError))
-        engine = RoundEngine(database.dao(), coach)
-        cardEngine = CardEngine(
-            database.cards(),
-            LlmCardGen(ChatClient(config = { settings.llm.value }, http = ChatClient.defaultHttpClient(60), usage = stats, onError = logError)),
-        )
-        drillGen = com.yishou.app.llm.LlmDrillGen(
-            ChatClient(config = { settings.llm.value }, http = ChatClient.defaultHttpClient(60), usage = stats, onError = logError),
-        )
-        materials = com.yishou.app.system.MaterialImport(this)
-        summaryEngine = SummaryEngine(database.dao(), coach, prefs = { settings.app.value }, ledger = { from, to -> dayLedger.between(from, to) })
-        vision = Vision(
-            ChatClient(config = { settings.vision.value }, http = ChatClient.defaultHttpClient(60), usage = stats, onError = logError),
-        )
         speechApi = SpeechApi(config = { settings.speech.value })
         voice = VoiceInput(this)
 

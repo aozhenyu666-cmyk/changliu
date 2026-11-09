@@ -31,7 +31,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yishou.app.YishouApp
 import com.yishou.app.data.EchoKind
 import com.yishou.app.data.ScrollQuizRow
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmResult
 import com.yishou.app.scroll.Judged
 import com.yishou.app.scroll.Lens
 import com.yishou.app.scroll.Quiz

@@ -6,6 +6,7 @@ import com.changliu.core.DieStat
 import com.changliu.core.History
 import com.changliu.core.Profile
 import com.changliu.core.Telemetry
+import com.changliu.infra.secret.SecretBox
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File

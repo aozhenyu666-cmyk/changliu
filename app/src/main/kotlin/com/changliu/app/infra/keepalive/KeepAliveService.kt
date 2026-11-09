@@ -28,6 +28,7 @@ import com.changliu.app.Intercept
 import com.changliu.app.MainActivity
 import com.changliu.app.R
 import com.changliu.app.UsageMonitor
+import com.changliu.app.hub.ledger.Ledger
 import com.zongkong.app.healthwire.LocalGuardian as ZkLocalGuardian
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -112,6 +113,9 @@ class KeepAliveService : Service() {
     private var lastLabel = ""
     @Volatile private var lastPeerAt = 0L
     @Volatile private var lastZkCheck = 0L
+    @Volatile private var lastRollupAt = 0L
+    @Volatile private var lastZkSyncAt = 0L
+    @Volatile private var lastSyncMaterialsAt = 0L
     private val checking = AtomicBoolean(false)
     private var signals: AudioSignals? = null
 
@@ -146,7 +150,13 @@ class KeepAliveService : Service() {
             lockActive = true
             lockLabel = it
         }
-        startForegroundNotification()
+        // 前台服务必须尽快 startForeground；失败就停掉自己，避免系统判 ANR
+        val started = runCatching { startForegroundNotification() }.isSuccess
+        if (!started) {
+            running = false
+            stopSelf()
+            return START_NOT_STICKY
+        }
         running = true
         main.removeCallbacks(ticker)
         main.post(ticker)
@@ -193,12 +203,33 @@ class KeepAliveService : Service() {
                     A11yGuard.ensurePeers(this)
                 }
                 UsageMonitor.check(this)
+                // P4 主动唤醒（本地规则，只出 L0 卡）
+                runCatching { com.changliu.app.hub.wake.WakeScheduler.tick(this) }
+                // 账本 rollup：每 10 分钟一次，顺带清理 180 天前的数据
+                if (now - lastRollupAt > 10 * 60_000L) {
+                    lastRollupAt = now
+                    runCatching { kotlinx.coroutines.runBlocking { Ledger.rollup(this@KeepAliveService) } }
+                }
+                // 四部 → 一手：脉络里的假设落成素材，拦截时才有专属题可问
+                if (now - lastSyncMaterialsAt > 10 * 60_000L) {
+                    lastSyncMaterialsAt = now
+                    runCatching { com.changliu.app.hub.sync.MaterialSync.run(this@KeepAliveService) }
+                }
                 // 总控原来的 60 秒本地规则兜底（紧急暂停/锁屏）保留；
                 // SelfHeal/Watchdog 属于旧 GuardService 的健康协议，融合后会误报「无障碍被关」，
                 // 健康检查统一交给 A11yGuard（实施计划 §5.4）。
                 if (now - lastZkCheck > 60_000L) {
                     lastZkCheck = now
                     runCatching { ZkLocalGuardian.tick(this) }
+                }
+                // 总控 Notion 双向同步：原 GuardService 每 15 分钟一次，这里补回来（没配就快速返回）
+                if (now - lastZkSyncAt > 15 * 60_000L) {
+                    lastZkSyncAt = now
+                    runCatching {
+                        kotlinx.coroutines.runBlocking {
+                            (applicationContext as com.zongkong.app.ZkHost).actions.sync()
+                        }
+                    }
                 }
                 updateNotification(on)
                 scheduleBackstop(this)

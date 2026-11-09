@@ -112,6 +112,24 @@
             android:exported="false"
             android:label="长流 · 记忆" />
 
+        <!-- API 与集成：统一网关/Key/模型/语音/Notion -->
+        <activity
+            android:name=".ui.UnifiedSettingsActivity"
+            android:exported="false"
+            android:label="长流 · API 与集成" />
+
+        <!-- 统一约束：一份名单、四种模式 -->
+        <activity
+            android:name=".ui.ConstraintsActivity"
+            android:exported="false"
+            android:label="长流 · 约束" />
+
+        <!-- 中枢对话：工具调用 / T3 确认 / 操作日志 -->
+        <activity
+            android:name=".ui.ConductorActivity"
+            android:exported="false"
+            android:label="长流 · 中枢" />
+
         <!-- 一手页面（融合后由统一壳进入；暂不占启动器） -->
         <activity
             android:name="com.yishou.app.MainActivity"

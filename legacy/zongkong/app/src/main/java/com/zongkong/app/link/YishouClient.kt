@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.core.os.bundleOf
+import com.changliu.infra.fusion.FusionHooks
 import com.zongkong.core.Link
 import com.zongkong.core.YishouStatus
 import kotlinx.coroutines.Dispatchers
@@ -18,9 +19,14 @@ object YishouClient {
         data class Err(val message: String) : Result<Nothing>
     }
 
-    fun installed(context: Context) = Partner.installed(context)
+    fun installed(context: Context) = FusionHooks.yishouInstalled?.invoke() ?: Partner.installed(context)
 
     suspend fun status(context: Context): Result<YishouStatus> = withContext(Dispatchers.IO) {
+        // 融合包：直接读一手进程内数据，不再走 ContentProvider/签名校验
+        FusionHooks.yishouSnapshot?.let { provider ->
+            val snap = provider() ?: return@withContext Result.Err("一手还没启动好")
+            return@withContext Result.Ok(YishouStatus.fromMap(snap.toMap()))
+        }
         call(context, Link.STATUS, null) { b ->
             @Suppress("DEPRECATION")
             YishouStatus.fromMap(b.keySet().associateWith { b.get(it) })
@@ -29,15 +35,32 @@ object YishouClient {
 
     /** 交给一手陪练：新建或更新一手的当前任务。返回一手的回话。 */
     suspend fun setTask(context: Context, order: Map<String, String>): Result<String> = withContext(Dispatchers.IO) {
+        FusionHooks.yishouSetTask?.let { hook ->
+            return@withContext try {
+                val msg = hook(order)
+                if (msg.isNullOrBlank()) Result.Err("一手没有回应") else Result.Ok(msg)
+            } catch (e: Exception) {
+                Result.Err("连一手出错：${e.message ?: e.javaClass.simpleName}")
+            }
+        }
         call(context, Link.SET_TASK, bundleOf(*order.toList().toTypedArray())) { b -> b.getString(Link.OK).orEmpty() }
     }
 
     /** 让一手现在开一局陪练窗口（默认长度按一手的设置），再打开一手的窗口页。 */
     suspend fun startWindow(context: Context): Result<String> = withContext(Dispatchers.IO) {
+        FusionHooks.yishouStartWindow?.let { hook ->
+            return@withContext try {
+                val msg = hook()
+                if (msg.isNullOrBlank()) Result.Err("一手没有回应") else Result.Ok(msg)
+            } catch (e: Exception) {
+                Result.Err("开局失败：${e.message ?: e.javaClass.simpleName}")
+            }
+        }
         call(context, Link.START_WINDOW, null) { b -> b.getString(Link.OK).orEmpty() }
     }
 
     fun openWindow(context: Context): Boolean {
+        FusionHooks.openYishouWindow?.let { return it() }
         val intent = context.packageManager.getLaunchIntentForPackage(Link.YISHOU) ?: return false
         return try {
             context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("open", "window"))

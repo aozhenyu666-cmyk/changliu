@@ -1,5 +1,7 @@
 package com.yishou.app.llm
 
+import com.changliu.infra.llm.*
+
 /**
  * 识图：把用户拍下的作答痕迹（手写演算、做过的题）转写成文字，
  * 再和文字回答一起交给陪练判定。用设置里单独填写的识图模型。

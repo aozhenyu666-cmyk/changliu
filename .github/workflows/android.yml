@@ -1,0 +1,56 @@
+name: android
+
+# 编译只在这里跑：本地不再出 APK，所有产物都由 GitHub Actions 生成。
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: 单元测试（core 纯逻辑）
+        run: |
+          chmod +x gradlew
+          ./gradlew :core:test --console=plain
+
+      - name: 打包调试 APK
+        run: ./gradlew :app:assembleDebug --console=plain
+
+      - name: 上传产物（APK + 测试报告）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: changliu-debug-apk
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            core/build/reports/tests/test
+          if-no-files-found: warn
+
+      - name: 发布到 Release（手机可直接下载）
+        if: success() && github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: debug-latest
+          name: 调试构建（最新）
+          prerelease: true
+          files: app/build/outputs/apk/debug/app-debug.apk
+          body: |
+            分支 `${{ github.ref_name }}` · 提交 `${{ github.sha }}`
+
+            由 GitHub Actions 构建，debug 签名（仓库内固定 keystore），可直接覆盖安装，旧数据不丢。
+            版本号来自 `app/build.gradle.kts`。

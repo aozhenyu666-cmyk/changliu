@@ -3,7 +3,7 @@ package com.yishou.app.stats
 import com.yishou.app.settings.AppZone
 
 import android.content.Context
-import com.yishou.app.llm.UsageSink
+import com.changliu.infra.llm.UsageSink
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

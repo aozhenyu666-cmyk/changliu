@@ -28,7 +28,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.yishou.app.R
 import com.yishou.app.YishouApp
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmResult
 import com.yishou.app.stats.DayStats
 import com.yishou.app.system.Notifications
 import com.yishou.app.window.Speaker

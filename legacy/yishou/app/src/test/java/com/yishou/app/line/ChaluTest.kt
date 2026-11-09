@@ -5,7 +5,7 @@ import com.yishou.app.data.EchoKind
 import com.yishou.app.data.LineVerdict
 import com.yishou.app.llm.CoachReply
 import com.yishou.app.llm.LineCoach
-import com.yishou.app.llm.LlmResult
+import com.changliu.infra.llm.LlmResult
 import com.yishou.app.think.Logic
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
