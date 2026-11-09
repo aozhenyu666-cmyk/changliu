@@ -46,6 +46,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: debug-latest
+          # 不写死就让 tag 落在默认分支上，跟实际构建的提交对不上
+          target_commitish: ${{ github.sha }}
           name: 调试构建（最新）
           prerelease: true
           files: app/build/outputs/apk/debug/app-debug.apk
