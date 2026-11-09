@@ -434,9 +434,9 @@ SharedPreferences brain_voice    L1 开关
 
 ### 10.2 待补功能（按优先级）
 
-1. 一手 `WindowClock/WindowRules`（短停留、到点拉回）并入唯一服务；
-2. 总控截图抽查、Notion 同步、提醒后台任务并入唯一服务；
-3. 哨兵/healthwire 要么删除，要么改为进程内健康自检；
+1. ~~一手 `WindowClock/WindowRules` 并入唯一服务~~（`YsGateLink` 已接：放行 / 短暂停留 / 拉回）；
+2. ~~总控截图抽查、Notion 同步、提醒后台任务并入唯一服务~~（0.8.5：`infra/link/ZkBackground`）；
+3. ~~哨兵/healthwire 改为进程内健康自检~~（0.8.5：无障碍医生 `core/A11yDoctor` + `infra/a11y/A11yDoctorRuntime`：写回 / 僵死重启 / 定时重启）；哨兵代码仍在，可在真机验收后删；
 4. 主动引擎 L1 在无 TTS 环境下明确降级文案；
 5. 统一壳首页继续长成「伙伴对话 + 今天」完整版。
 

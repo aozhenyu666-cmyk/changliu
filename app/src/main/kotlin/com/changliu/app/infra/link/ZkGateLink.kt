@@ -75,6 +75,14 @@ object ZkGateLink {
         host.store.heartbeat = now
         if (interactive(ctx)) accountPlay(ctx, now) else fgSince = now
         trackedPkg?.let { watch(ctx, host, it, now) }
+        // 没有窗口切换也要管：总控时间刚开始时你正停在别的应用里 → 拉回来；严管开始时正开着娱乐应用 → 弹回
+        val p = fgPkg ?: return
+        if (SentinelClient.released(now) || !interactive(ctx)) return
+        val status = runCatching { host.store.status(now) }.getOrNull() ?: return
+        if (host.store.hq.value.active == null && !status.strict) return
+        // 和窗口事件同一条路：统一名单里的应用先交给单管道（只弹一页），名单外的才走总控原来的弹回
+        if (runCatching { com.changliu.app.hub.policy.GateDirector.intercept(ctx, p) }.getOrDefault(false)) return
+        if (host.store.hq.value.active != null) lockdown(ctx, host, p, now) else enforce(ctx, host, p, now)
     }
 
     /** 总控时间：白名单以外的应用（包括桌面）一出现就回到总控时间。 */

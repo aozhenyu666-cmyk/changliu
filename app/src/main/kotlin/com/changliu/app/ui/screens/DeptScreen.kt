@@ -100,7 +100,9 @@ fun DeptScreen(snap: ShellSnap, onOpenDepts: () -> Unit) {
 
         SectionHeader("入口")
         ChangliuCard {
-            EntryRow("四部总览", "行为 / 学习 / 身体 / 财务", onClick = onOpenDepts, showDivider = true)
+            EntryRow("公审档案", "底线表 / 执行令 / 微习惯 / 防错规避库 / 导出 Obsidian", onClick = { Openers.zk(ctx, "court") }, showDivider = true)
+            EntryRow("行测五步", "精简 · 预判 · 联想 · 提问 · 回想，每天 5 道", onClick = { Openers.zk(ctx, "drill") }, showDivider = true)
+            EntryRow("四部总览", "收 → 谋 → 筹 → 行，上一环没过下一环不放行", onClick = onOpenDepts, showDivider = true)
             EntryRow("今日部署", "今天排了什么、交没交", onClick = { Openers.zk(ctx, "today") }, showDivider = true)
             EntryRow("参谋", "把今天交给总控排一遍", onClick = { Openers.zk(ctx, "chat") }, showDivider = true)
             EntryRow("计划", "在推的事与下一步", onClick = { Openers.zk(ctx, "plan") })

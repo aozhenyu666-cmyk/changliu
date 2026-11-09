@@ -41,12 +41,8 @@ class WatchdogJob : JobService() {
         val ctx = applicationContext
         Thread {
             runCatching {
-                if (A11yGuard.isOn(ctx)) {
-                    A11yGuard.clearDownNotice(ctx)
-                } else {
-                    val healed = A11yGuard.ensure(ctx)
-                    if (!healed && !A11yGuard.canHeal(ctx)) A11yGuard.notifyDown(ctx)
-                }
+                // 无障碍医生：写回 / 僵死重启 / 定时重启 / 提醒手动开
+                com.changliu.app.infra.a11y.A11yDoctorRuntime.check(ctx)
                 // 看门狗也负责把常驻守护拉回来：服务被清掉时，光写回无障碍还不够
                 KeepAliveService.sync(ctx)
             }

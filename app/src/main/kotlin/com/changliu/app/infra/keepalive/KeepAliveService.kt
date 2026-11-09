@@ -62,7 +62,13 @@ class KeepAliveService : Service() {
         /** 锁定/陪练、拦截或监督任一开着，就需要常驻。 */
         fun needed(context: Context): Boolean =
             lockActive || Engine.locked || Intercept.enabled(context) ||
-                AwarenessRuntime.active || Engine.store.settings().peerGuard
+                AwarenessRuntime.active || Engine.store.settings().peerGuard || zkWants(context)
+
+        /** 总控开着每日总控时间或有拦截名单：自律体系在跑，常驻守护就不能停。 */
+        private fun zkWants(context: Context): Boolean = runCatching {
+            val c = (context.applicationContext as com.zongkong.app.ZkHost).store.config.value
+            c.hq.enabled || c.blocked.isNotEmpty()
+        }.getOrDefault(false)
 
         fun sync(context: Context) {
             if (needed(context)) start(context) else stop(context)
@@ -190,13 +196,9 @@ class KeepAliveService : Service() {
         if (!checking.compareAndSet(false, true)) return
         Thread {
             try {
+                // 无障碍医生：被摘掉就写回、开着却僵死就关一下再开、到点在熄屏时定时重启
+                runCatching { com.changliu.app.infra.a11y.A11yDoctorRuntime.check(this) }
                 val on = A11yGuard.isOn(this)
-                if (!on) {
-                    val healed = A11yGuard.ensure(this)
-                    if (!healed && !A11yGuard.canHeal(this)) A11yGuard.notifyDown(this)
-                } else {
-                    A11yGuard.clearDownNotice(this)
-                }
                 val now = System.currentTimeMillis()
                 if (now - lastPeerAt > 5 * 60_000L) {
                     lastPeerAt = now

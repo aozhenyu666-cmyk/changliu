@@ -78,6 +78,8 @@ class ChangliuApp : YishouApp(), ZkHost {
         Engine.init(this)
 
         // 三条拦截决策链挂到唯一无障碍服务上（总控优先，其次一手，最后驾驶员兜底）
+        // 总控原常驻服务的后台活（提醒、总控时间叫醒、截图抽查、Notion 同步、自动验收）
+        com.changliu.app.infra.link.ZkBackground.install()
         ZkGateLink.install()
         YsGateLink.install()
         FusionLink.install(this)

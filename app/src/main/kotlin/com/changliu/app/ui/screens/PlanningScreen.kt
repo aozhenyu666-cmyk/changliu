@@ -158,7 +158,10 @@ fun PlanningScreen() {
             EntryRow("中枢对话", "能读三端数据、调工具、改约束", onClick = {
                 ctx.startActivity(Intent(ctx, ConductorActivity::class.java))
             }, showDivider = true)
-            EntryRow("四部", "行为 / 学习 / 身体 / 财务", onClick = { Openers.zk(ctx, "depts") }, showDivider = true)
+            EntryRow("公审档案", "底线表 / 执行令 / 微习惯 / 防错规避库 / 导出 Obsidian", onClick = { Openers.zk(ctx, "court") }, showDivider = true)
+            EntryRow("行测五步", "精简 · 预判 · 联想 · 提问 · 回想，每天 5 道", onClick = { Openers.zk(ctx, "drill") }, showDivider = true)
+            EntryRow("总控时间", "今晚的公审：查账 → 分流 → 对底线 → 防瘫痪 → 三层矫正 → 签执行令", onClick = { Openers.zk(ctx, "hq") }, showDivider = true)
+            EntryRow("四部", "收 → 谋 → 筹 → 行，上一环没过下一环不放行", onClick = { Openers.zk(ctx, "depts") }, showDivider = true)
             EntryRow("今日部署", "今天排了什么、交没交", onClick = { Openers.zk(ctx, "today") }, showDivider = true)
             EntryRow("计划", "目标树、里程碑、周计划", onClick = { Openers.zk(ctx, "plan") })
         }

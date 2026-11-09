@@ -62,6 +62,20 @@ data class ShellSnap(
     /** 四部 → 一手的弹药：已经落进素材池的假设数 / 还没落的。 */
     val veinFed: Int = 0,
     val veinPending: Int = 0,
+    // 公审（总控四部门流水线）
+    val courtReady: Boolean = false,
+    val frontline: String = "",
+    val examLeft: Int? = null,
+    val fuseText: String = "",
+    val drillsToday: Int = 0,
+    val drillsGoal: Int = 5,
+    val openOrder: String = "",
+    val hqAt: String = "",
+    // 无障碍医生
+    val canHeal: Boolean = false,
+    val doctorLine: String = "",
+    val doctorEvery: Int = 6,
+    val doctorLog: List<String> = emptyList(),
 ) {
     val driverLeft: Int get() = (driverQuotaMin - driverUsedMin).coerceAtLeast(0)
     val zkLeft: Int get() = (zkQuotaMin - zkPlayMin).coerceAtLeast(0)
@@ -108,6 +122,12 @@ object ShellData {
         val zkStatus = app?.let { runCatching { it.store.status(now) }.getOrNull() }
         val hq = app?.let { runCatching { it.store.hq.value.active }.getOrNull() }
         val hqLeft = hq?.let { ((it.endsAt - now) / 60_000L).coerceAtLeast(0).toInt() } ?: 0
+
+        // 公审
+        val court = app?.let { runCatching { it.store.court.value }.getOrNull() }
+        val courtDay = app?.let { com.zongkong.core.DayClock.dateKey(now, it.store.zone) }.orEmpty()
+        val fuse = app?.let { runCatching { it.store.fuse(now) }.getOrNull() }
+        val hqCfg = app?.let { runCatching { it.store.config.value.hq }.getOrNull() }
 
         // 一手
         val prefs = app?.let { runCatching { it.settings.app.value }.getOrNull() }
@@ -161,6 +181,18 @@ object ShellData {
             gateReason = zone?.reason.orEmpty(),
             veinFed = hypo.count { it.id in fed },
             veinPending = hypo.count { it.id !in fed },
+            courtReady = court?.baseline?.ready == true,
+            frontline = court?.baseline?.frontline.orEmpty(),
+            examLeft = court?.let { com.zongkong.core.court.Court.daysLeft(it, courtDay) },
+            fuseText = fuse?.text.orEmpty(),
+            drillsToday = court?.let { com.zongkong.core.court.Court.drillsOn(it, courtDay) } ?: 0,
+            drillsGoal = com.zongkong.core.court.Court.DAILY_DRILLS,
+            openOrder = court?.let { com.zongkong.core.court.Court.openOrder(it)?.text }.orEmpty(),
+            hqAt = hqCfg?.takeIf { it.enabled }?.let { com.zongkong.core.DayClock.hhmm(it.at) }.orEmpty(),
+            canHeal = runCatching { A11yGuard.canHeal(ctx) }.getOrDefault(false),
+            doctorLine = runCatching { com.changliu.app.infra.a11y.A11yDoctorRuntime.describe(ctx) }.getOrDefault(""),
+            doctorEvery = runCatching { com.changliu.app.infra.a11y.A11yDoctorRuntime.everyHours(ctx) }.getOrDefault(6),
+            doctorLog = runCatching { com.changliu.app.infra.a11y.A11yDoctorRuntime.log(ctx).take(6) }.getOrDefault(emptyList()),
         )
     }
 }

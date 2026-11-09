@@ -14,8 +14,8 @@ android {
     defaultConfig {
         minSdk = 26
         // library 模块默认不生成 VERSION_NAME/CODE，总控 UI 与健康协议要用
-        buildConfigField("String", "VERSION_NAME", "\"0.16.0-health-v2\"")
-        buildConfigField("int", "VERSION_CODE", "19")
+        buildConfigField("String", "VERSION_NAME", "\"0.17.0-court\"")
+        buildConfigField("int", "VERSION_CODE", "20")
     }
 
     compileOptions {

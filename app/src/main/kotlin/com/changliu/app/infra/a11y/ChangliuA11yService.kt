@@ -95,6 +95,9 @@ class ChangliuA11yService : AccessibilityService() {
 
     override fun onServiceConnected() {
         running = true
+        instance = this
+        connectedAt = System.currentTimeMillis()
+        lastEventAt = connectedAt
         Engine.watchConnected = true
         ObservationShots.connected(this)
         GateTrace.init(this)
@@ -117,6 +120,7 @@ class ChangliuA11yService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
+        lastEventAt = System.currentTimeMillis()
         heartbeat()
         if (event.eventType and TARGET_EVENTS == 0) return
         if (!AwarenessRuntime.screenAvailable()) { Engine.onForeground(this, null, null); return }
@@ -128,6 +132,7 @@ class ChangliuA11yService : AccessibilityService() {
         @Suppress("DEPRECATION") runCatching { root?.recycle() }
         if (active.isNullOrBlank() || active != pkg) { Engine.onForeground(this, null, null); return }
         recordLedgerForeground(active)
+        runCatching { com.changliu.app.infra.link.ZkBackground.noteForeground(this, active) }
 
         // 回到我们自己的页 / 别的应用：遮罩立刻收起，不常驻
         if (active == packageName || cover.pkg?.let { it != active } == true) cover.hide()
@@ -224,11 +229,13 @@ class ChangliuA11yService : AccessibilityService() {
 
     override fun onUnbind(intent: Intent?): Boolean {
         running = false
+        instance = null
         return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
         running = false
+        instance = null
         flushLedgerForeground()
         Engine.watchConnected = false
         ObservationShots.connected(null)
@@ -245,6 +252,20 @@ class ChangliuA11yService : AccessibilityService() {
         /** 唯一无障碍是否真的连上（给总控的权限状态桥用）。 */
         @Volatile
         var running = false
+            private set
+
+        /** 连上的实例（总控截图抽查、桌面宠物要用）；没连上是 null。 */
+        @Volatile
+        var instance: ChangliuA11yService? = null
+            private set
+
+        /** 最近一次连上 / 收到事件的时刻（无障碍医生判断“僵死”用）。 */
+        @Volatile
+        var connectedAt = 0L
+            private set
+
+        @Volatile
+        var lastEventAt = 0L
             private set
 
         private const val TARGET_EVENTS = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED

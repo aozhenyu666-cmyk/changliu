@@ -22,6 +22,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material3.OutlinedButton
+import com.changliu.app.ui.Openers
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -35,6 +38,7 @@ import com.changliu.app.ui.components.StatTile
 import com.changliu.app.ui.components.StatusPill
 import com.changliu.app.ui.components.ThinProgress
 import com.changliu.app.ui.components.Tone
+import com.changliu.app.ui.components.fg
 
 @Composable
 fun HomeScreen(
@@ -60,6 +64,8 @@ fun HomeScreen(
             StatusPill(if (snap.zkStrict) "总控严管" else "总控放行", if (snap.zkStrict) Tone.Seal else Tone.Neutral)
         }
 
+        Spacer(Modifier.height(16.dp))
+        CourtHero(snap)
         Spacer(Modifier.height(16.dp))
         GateCard(snap)
 
@@ -237,6 +243,46 @@ private fun IdleHero(snap: ShellSnap, onOpenDriver: () -> Unit) {
         Spacer(Modifier.height(4.dp))
         Button(onClick = onOpenDriver, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(50)) {
             Text("开始陪练")
+        }
+    }
+}
+
+/**
+ * 公审：四个部门的流水线放在首页最上面。熔断时整张卡变成警示，按钮直接去做行测五步。
+ */
+@Composable
+private fun CourtHero(snap: ShellSnap) {
+    val ctx = LocalContext.current
+    val fused = snap.fuseText.isNotBlank()
+    ChangliuCard(onClick = { Openers.zk(ctx, "court") }) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Kicker(if (fused) "公审 · 熔断中" else "公审 · 四部门流水线", if (fused) Tone.Bad else Tone.Seal)
+            Spacer(Modifier.weight(1f))
+            snap.examLeft?.takeIf { it >= 0 }?.let { StatusPill("笔试还剩 $it 天", Tone.Seal) }
+        }
+        Text(
+            if (snap.courtReady) "前线死令：${snap.frontline}" else "《全局战略底线表》还没填：前线死令 + 退路底牌",
+            style = MaterialTheme.typography.titleMedium,
+            color = if (snap.courtReady) MaterialTheme.colorScheme.onSurface else Tone.Warn.fg(),
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (fused) Text(snap.fuseText, style = MaterialTheme.typography.bodyMedium, color = Tone.Bad.fg())
+        if (snap.openOrder.isNotBlank()) {
+            Text("待查执行令：${snap.openOrder}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Text(
+            "行测五步 ${snap.drillsToday}/${snap.drillsGoal} 道" + if (snap.hqAt.isNotBlank()) " · 今晚 ${snap.hqAt} 总控时间" else "",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Button(onClick = { Openers.zk(ctx, "drill") }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(50)) {
+                Text("做一道行测")
+            }
+            OutlinedButton(onClick = { Openers.zk(ctx, "hq") }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(50)) {
+                Text("总控时间")
+            }
         }
     }
 }

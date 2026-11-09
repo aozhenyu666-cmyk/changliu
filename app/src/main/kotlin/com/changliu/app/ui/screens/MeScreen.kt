@@ -24,6 +24,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.changliu.app.BuildConfig
+import com.changliu.app.infra.a11y.A11yDoctorRuntime
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.OutlinedButton
 import com.changliu.app.brain.VoiceNudge
 import com.changliu.app.ui.ConstraintsActivity
 import com.changliu.app.ui.MemoryActivity
@@ -37,6 +41,7 @@ import com.changliu.app.ui.components.ScreenTitle
 import com.changliu.app.ui.components.SectionHeader
 import com.changliu.app.ui.components.StatusPill
 import com.changliu.app.ui.components.Tone
+import com.changliu.app.ui.components.fg
 
 @Composable
 fun MeScreen(snap: ShellSnap) {
@@ -70,6 +75,9 @@ fun MeScreen(snap: ShellSnap) {
             )
             VoiceRow(ctx)
         }
+
+        SectionHeader("无障碍医生")
+        DoctorCard(snap)
 
         SectionHeader("集成")
         ChangliuCard {
@@ -159,5 +167,46 @@ private fun RowLine(label: String, value: String, tone: Tone) {
             modifier = Modifier.weight(1f),
         )
         StatusPill(value, tone)
+    }
+}
+
+/**
+ * 无障碍医生：被摘掉自动写回、开着却僵死自动“关一下再开”、可选定时重启（熄屏时做）。
+ * 没有写权限时，告诉你缺哪一步（Shizuku 授权一次 / adb 授权一次）。
+ */
+@Composable
+private fun DoctorCard(snap: ShellSnap) {
+    val ctx = LocalContext.current
+    var every by remember { mutableStateOf(snap.doctorEvery) }
+    var msg by remember { mutableStateOf<String?>(null) }
+    ChangliuCard {
+        RowLine("自救能力", if (snap.canHeal) "能自己救" else "只能提醒", if (snap.canHeal) Tone.Ok else Tone.Warn)
+        Text(snap.doctorLine, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (!snap.canHeal) {
+            Text(
+                "想让它自己救：装 Shizuku 后在「陪练（驾驶员）」首页授权一次；或电脑上执行一次 " +
+                    "adb shell pm grant ${ctx.packageName} android.permission.WRITE_SECURE_SETTINGS",
+                style = MaterialTheme.typography.bodySmall,
+                color = Tone.Warn.fg(),
+            )
+        }
+        Text("定时重启（熄屏、没在答题 / 总控时间时）", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            A11yDoctorRuntime.EVERY_CHOICES.forEach { h ->
+                FilterChip(
+                    selected = every == h,
+                    onClick = { every = h; A11yDoctorRuntime.setEveryHours(ctx, h) },
+                    label = { Text(if (h == 0) "关" else "每 $h 小时") },
+                )
+            }
+        }
+        OutlinedButton(onClick = {
+            msg = if (A11yDoctorRuntime.restartNow(ctx)) "正在关一下再开，几秒后回来看记录。" else "没有写回权限，只能去系统设置里手动关开。"
+        }, modifier = Modifier.fillMaxWidth()) { Text("现在重启一次无障碍") }
+        msg?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        if (snap.doctorLog.isNotEmpty()) {
+            Text("最近的修复", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+            snap.doctorLog.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
     }
 }
